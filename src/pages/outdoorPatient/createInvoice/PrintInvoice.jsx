@@ -349,35 +349,43 @@ const pdf$ = StyleSheet.create({
   // ── Patient info box ────────────────────────────────────────────────────
   // Single bordered card: fields stacked on the left, a vertical divider,
   // then the QR code on the right — matches the reference layout while
-  // staying on the A5 page.
+  // staying on the A5 page. Padding/line-height trimmed down so this box
+  // takes minimal vertical space, leaving room for 15-20 test rows below.
   patientBox: {
-    marginTop: 3,
-    marginBottom: 3,
+    marginTop: 2,
+    marginBottom: 2,
     border: "1.5 solid #000000",
     borderRadius: 0,
-    padding: 8,
+    padding: 5,
     flexDirection: "row",
     alignItems: "stretch",
   },
-  patientInfoCol: { flex: 1, paddingRight: 8, justifyContent: "center" },
-  patientDivider: { width: 1, backgroundColor: "#d1d5db", marginHorizontal: 8 },
+  patientInfoCol: { flex: 1, paddingRight: 6, justifyContent: "center" },
+  patientDivider: { width: 1, backgroundColor: "#d1d5db", marginHorizontal: 6 },
   // Aligned label/value rows — fixed-width label column so every value
   // (Invoice ID, Time, Name, Age/Gender, Contact, Doctor's Name) starts at
   // the same x position.
-  patientFieldRow: { flexDirection: "row", marginBottom: 3 },
+  patientFieldRow: { flexDirection: "row", marginBottom: 1.5 },
   patientFieldRowLast: { flexDirection: "row" },
-  patientFieldLabel: { width: 82, paddingRight: 4, fontFamily: "Helvetica", fontSize: 8.5, color: "#000000" },
-  patientFieldValue: { flex: 1, fontFamily: "Helvetica-Bold", fontSize: 8.5, color: "#000000" },
-  patientFieldValueName: { flex: 1, fontFamily: "Helvetica-Bold", fontSize: 11, color: "#000000" },
+  patientFieldLabel: {
+    width: 76,
+    paddingRight: 3,
+    fontFamily: "Helvetica",
+    fontSize: 7.5,
+    lineHeight: 1.1,
+    color: "#000000",
+  },
+  patientFieldValue: { flex: 1, fontFamily: "Helvetica-Bold", fontSize: 7.5, lineHeight: 1.1, color: "#000000" },
+  patientFieldValueName: { flex: 1, fontFamily: "Helvetica-Bold", fontSize: 9.5, lineHeight: 1.1, color: "#000000" },
   // Inline label used for the "Time" sub-label packed inside the Invoice ID
   // row's value cell (not its own regular/bold weight).
-  fieldLabelLine: { fontFamily: "Helvetica", fontSize: 8.5, color: "#000000" },
-  // QR — sits inside the patient box, right of the divider. Bumped up from
-  // 42 -> 60 so it reads clearly when scanned straight off a phone screen.
+  fieldLabelLine: { fontFamily: "Helvetica", fontSize: 7.5, color: "#000000" },
+  // QR — sits inside the patient box, right of the divider. Sized to match
+  // the now-shorter box height instead of overflowing/inflating it.
   qrContainer: { alignItems: "center", justifyContent: "center" },
-  qrImage: { width: 60, height: 60 },
-  qrLabel: { fontSize: 6, color: "#000000", textAlign: "center", marginTop: 2 },
-  dlBtnWrapper: { marginTop: 4, position: "relative" },
+  qrImage: { width: 46, height: 46 },
+  qrLabel: { fontSize: 5, color: "#000000", textAlign: "center", marginTop: 1 },
+  dlBtnWrapper: { marginTop: 2, position: "relative" },
   dlBtn: {
     backgroundColor: "#2563eb",
     borderRadius: 4,
@@ -715,34 +723,34 @@ const InvoiceCard = ({ invoice, qrCodeUrl, labInfo, downloading = false, sharing
       </div>
 
       {/* Patient — bordered box: fields left, divider, QR right */}
-      <div className="px-6 py-2">
-        <div className="flex items-stretch border-2 border-black rounded-none p-3 gap-3">
-          <div className="flex-1 min-w-0 flex flex-col justify-center">
-            <p className="text-sm text-black leading-snug flex">
-              <span className="w-28 shrink-0 pr-2">Invoice ID:</span>
+      <div className="px-6 py-1.5">
+        <div className="flex items-stretch border-2 border-black rounded-none p-2 gap-2">
+          <div className="flex-1 min-w-0 flex flex-col justify-center gap-px">
+            <p className="text-xs text-black leading-tight flex">
+              <span className="w-24 shrink-0 pr-2">Invoice ID:</span>
               <span className="font-medium">
                 {invoiceId || "N/A"}
-                <span className="font-normal ml-8">Time: </span>
+                <span className="font-normal ml-6">Time: </span>
                 <span className="font-medium">{formatDateTimeMerged(createdAt)}</span>
               </span>
             </p>
-            <p className="text-base text-black leading-snug flex mb-1">
-              <span className="w-28 shrink-0 pr-2">Name:</span>
+            <p className="text-sm text-black leading-tight flex">
+              <span className="w-24 shrink-0 pr-2">Name:</span>
               <span className="font-bold truncate">{patient.name}</span>
             </p>
-            <p className="text-sm text-black leading-snug flex">
-              <span className="w-28 shrink-0 pr-2">Age / Gender:</span>
+            <p className="text-xs text-black leading-tight flex">
+              <span className="w-24 shrink-0 pr-2">Age / Gender:</span>
               <span className="font-medium">
                 {formatAgeCompact(patient.age)} / {formatGenderShort(patient.gender)}
               </span>
             </p>
-            <p className="text-sm text-black leading-snug flex">
-              <span className="w-28 shrink-0 pr-2">Contact:</span>
+            <p className="text-xs text-black leading-tight flex">
+              <span className="w-24 shrink-0 pr-2">Contact:</span>
               <span className="font-medium">{patient.contactNumber}</span>
             </p>
             {flags.showDoctorName && (
-              <p className="text-sm text-black leading-snug flex">
-                <span className="w-28 shrink-0 pr-2">Doctor's Name:</span>
+              <p className="text-xs text-black leading-tight flex">
+                <span className="w-24 shrink-0 pr-2">Doctor's Name:</span>
                 <span className="font-medium">{flags.doctorNameLabel}</span>
               </p>
             )}
@@ -752,8 +760,8 @@ const InvoiceCard = ({ invoice, qrCodeUrl, labInfo, downloading = false, sharing
             <>
               <div className="w-px bg-gray-300" />
               <div className="shrink-0 flex flex-col items-center justify-center gap-0.5">
-                <img src={qrCodeUrl} alt="QR Code" className="w-24 h-24" />
-                <p className="text-[9px] text-black text-center leading-tight">Scan to download Reports</p>
+                <img src={qrCodeUrl} alt="QR Code" className="w-16 h-16" />
+                <p className="text-[8px] text-black text-center leading-tight">Scan to download Reports</p>
                 {showDownloadBtn && (
                   <a
                     href={reportLink}
