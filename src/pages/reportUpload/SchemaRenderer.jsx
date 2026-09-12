@@ -16,23 +16,26 @@ import {
   Pencil,
   Save,
   Activity,
+  Tag,
 } from "lucide-react";
 
 // ─── Age helpers ────────────────────────────────────────────────────────────
-// Age is now stored as { years, months, days } (any part may be absent,
-// defaults to 0). Range lookups need a single decimal-year number to
-// compare against minAge/maxAge; display needs a readable string.
+// Age is stored as { years, months, days } (any part may be absent, defaults
+// to 0) — both for the patient's own age and for age-bracket boundaries
+// inside a schema's standardRange. Both sides need to be compared the same
+// way, so bracket bounds are converted through the same helper as the
+// patient's age rather than parsed as plain numbers.
 
-function ageToDecimalYears(age) {
-  if (age === null || age === undefined || age === "") return null;
-  if (typeof age === "number") return age; // legacy numeric age, kept for safety
-  if (typeof age === "object") {
-    const { years = 0, months = 0, days = 0 } = age;
-    if (!years && !months && !days) return null;
-    return years + months / 12 + days / 365;
-  }
-  const parsed = parseFloat(age);
-  return isNaN(parsed) ? null : parsed;
+function hasAge(age) {
+  return !!age && typeof age === "object" && age.years !== "" && age.years !== undefined && age.years !== null;
+}
+
+function ageToValue(age) {
+  if (!age || typeof age !== "object") return null;
+  const y = Number(age.years) || 0;
+  const m = Number(age.months) || 0;
+  const d = Number(age.days) || 0;
+  return y * 365 + m * 30 + d;
 }
 
 function formatAge(age) {
@@ -46,35 +49,78 @@ function formatAge(age) {
   return parts.join(", ");
 }
 
-// ─── Range logic (unchanged) ──────────────────────────────────────────────────
+// ─── Range logic ─────────────────────────────────────────────────────────────
+// standardRange.data is tier-based: an array of { label, comparator, min,
+// max } (Simple), or age/gender/combined brackets each holding such an
+// array — mirrors SchemaBuilder exactly. There is no more plain min/max
+// mode, so a field's range always resolves to a set of tiers to match the
+// value against.
 
-export function getStandardRange(field, patientAge, patientGender) {
+export function getStandardRangeInfo(field, patientAge, patientGender) {
   const sr = field.standardRange;
   if (!sr || sr.type === "none") return null;
-  if (sr.type === "simple") return { min: parseFloat(sr.data.min), max: parseFloat(sr.data.max) };
-  if (sr.type === "age" && patientAge) {
-    const age = ageToDecimalYears(patientAge);
-    if (age !== null) {
-      const row = sr.data.find((r) => age >= parseFloat(r.minAge) && age <= parseFloat(r.maxAge));
-      if (row) return { min: parseFloat(row.minValue), max: parseFloat(row.maxValue) };
-    }
+
+  let tiers = [];
+  if (sr.type === "simple" && Array.isArray(sr.data)) {
+    tiers = sr.data;
+  } else if (sr.type === "age" && hasAge(patientAge) && Array.isArray(sr.data)) {
+    const ageVal = ageToValue(patientAge);
+    const bracket = sr.data.find((b) => ageVal >= ageToValue(b.minAge) && ageVal <= ageToValue(b.maxAge));
+    tiers = bracket?.tiers || [];
+  } else if (sr.type === "gender" && patientGender && sr.data) {
+    tiers = sr.data[patientGender] || [];
+  } else if (sr.type === "combined" && hasAge(patientAge) && patientGender && Array.isArray(sr.data)) {
+    const ageVal = ageToValue(patientAge);
+    const bracket = sr.data.find(
+      (b) => b.gender === patientGender && ageVal >= ageToValue(b.minAge) && ageVal <= ageToValue(b.maxAge),
+    );
+    tiers = bracket?.tiers || [];
   }
-  if (sr.type === "gender" && patientGender) {
-    const g = sr.data[patientGender];
-    if (g) return { min: parseFloat(g.min), max: parseFloat(g.max) };
-  }
-  if (sr.type === "combined" && patientAge && patientGender) {
-    const age = ageToDecimalYears(patientAge);
-    if (age !== null) {
-      const row = sr.data.find(
-        (r) => r.gender === patientGender && age >= parseFloat(r.minAge) && age <= parseFloat(r.maxAge),
-      );
-      if (row) return { min: parseFloat(row.minValue), max: parseFloat(row.maxValue) };
-    }
-  }
-  return null;
+
+  if (!tiers || tiers.length === 0) return null;
+  return { tiers };
 }
 
+function tierMatches(t, v) {
+  const comparator = t.comparator || "between";
+  const min = t.min === "" || t.min === null || t.min === undefined ? null : parseFloat(t.min);
+  const max = t.max === "" || t.max === null || t.max === undefined ? null : parseFloat(t.max);
+  switch (comparator) {
+    case "gt":
+      return min !== null && v > min;
+    case "gte":
+      return min !== null && v >= min;
+    case "lt":
+      return max !== null && v < max;
+    case "lte":
+      return max !== null && v <= max;
+    case "between":
+    default: {
+      const lo = min === null ? -Infinity : min;
+      const hi = max === null ? Infinity : max;
+      return v >= lo && v <= hi;
+    }
+  }
+}
+
+export function evaluateStatus(value, rangeInfo) {
+  if (!rangeInfo || value === "" || value === null || value === undefined) return null;
+  const v = parseFloat(value);
+  if (isNaN(v)) return null;
+
+  const tier = rangeInfo.tiers.find((t) => tierMatches(t, v));
+  if (!tier) return null;
+
+  const label = (tier.label || "").toLowerCase();
+  let status = "tag";
+  if (/low/.test(label)) status = "low";
+  else if (/high/.test(label)) status = "high";
+  else if (/normal|unremarkable|negative/.test(label)) status = "normal";
+  return { status, label: tier.label };
+}
+
+// Convenience for callers that already have a plain { min, max } (not a
+// field's standardRange) and just want low/normal/high classification.
 export function getRangeStatus(value, range) {
   if (!range || value === "" || value === null || value === undefined) return "neutral";
   const v = parseFloat(value);
@@ -112,16 +158,16 @@ function buildPayload(schema, values, patientAge, patientGender, testName) {
       const key = `${si}_${field.name}`;
       const val = values[key];
       if (val !== "" && val !== undefined && val !== null && !(Array.isArray(val) && val.length === 0)) {
-        sd[field.name] = {
+        const entry = {
           value: val,
           ...(field.unit ? { unit: field.unit } : {}),
-          ...(field.type === "number"
-            ? (() => {
-                const range = getStandardRange(field, patientAge, patientGender);
-                return range ? { referenceRange: `${range.min}–${range.max}` } : {};
-              })()
-            : {}),
         };
+        if (field.type === "number") {
+          const rangeInfo = getStandardRangeInfo(field, patientAge, patientGender);
+          const evaluated = evaluateStatus(val, rangeInfo);
+          if (evaluated) entry.referenceTag = evaluated.label;
+        }
+        sd[field.name] = entry;
       }
     });
     if (Object.keys(sd).length > 0) report[sec.name] = { ...sd, __showTitle: sec.showTitleInReport !== false };
@@ -136,6 +182,7 @@ const STATUS_BADGE = {
   normal: { icon: CheckCircle2, label: "Normal", cls: "bg-emerald-50 text-emerald-600 border-emerald-200" },
   low: { icon: TrendingDown, label: "Low", cls: "bg-orange-50 text-orange-600 border-orange-200" },
   high: { icon: TrendingUp, label: "High", cls: "bg-red-50 text-red-600 border-red-200" },
+  tag: { icon: Tag, label: null, cls: "bg-violet-50 text-violet-600 border-violet-200" },
 };
 
 const EditedBadge = () => (
@@ -183,34 +230,32 @@ function FieldRow({ field, isChanged, borderCls, footer, children }) {
 // ─── Field types ───────────────────────────────────────────────────────────────
 
 function NumberField({ field, value, onChange, error, patientAge, patientGender, originalValue, isEditMode }) {
-  const range = getStandardRange(field, patientAge, patientGender);
-  const status = getRangeStatus(value, range);
+  const rangeInfo = getStandardRangeInfo(field, patientAge, patientGender);
+  const evaluated = evaluateStatus(value, rangeInfo);
   const hasValue = value !== "" && value !== null && value !== undefined;
   const isChanged = isEditMode && originalValue !== undefined && String(value) !== String(originalValue ?? "");
-  const badge = hasValue && range && STATUS_BADGE[status];
+  const badge = hasValue && evaluated && STATUS_BADGE[evaluated.status];
 
   let borderCls = "border-slate-800";
   if (error) borderCls = "border-red-500";
   else if (isChanged) borderCls = "border-violet-500";
-  else if (status === "normal") borderCls = "border-emerald-500";
-  else if (status === "low") borderCls = "border-orange-500";
-  else if (status === "high") borderCls = "border-red-500";
+  else if (evaluated?.status === "normal") borderCls = "border-emerald-500";
+  else if (evaluated?.status === "low") borderCls = "border-orange-500";
+  else if (evaluated?.status === "high") borderCls = "border-red-500";
+  else if (evaluated?.status === "tag") borderCls = "border-violet-500";
 
   const footer =
-    range || badge ? (
+    rangeInfo || badge ? (
       <>
-        {range && (
-          <span className="text-[11px] text-slate-400 font-mono">
-            Ref: {range.min}–{range.max}
-            {field.unit ? ` ${field.unit}` : ""}
-          </span>
+        {rangeInfo && (
+          <span className="text-[11px] text-slate-400 font-mono">Ranges set{field.unit ? ` (${field.unit})` : ""}</span>
         )}
         {badge && (
           <span
             className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-semibold ${badge.cls}`}
           >
             <badge.icon className="w-2.5 h-2.5" />
-            {badge.label}
+            {badge.label || evaluated.label}
           </span>
         )}
       </>
@@ -727,12 +772,12 @@ function SchemaRenderer({
     sec.fields
       .filter((f) => f.type === "number")
       .map((f) => {
-        const range = getStandardRange(f, patientAge, patientGender);
-        return getRangeStatus(values[`${si}_${f.name}`], range);
+        const rangeInfo = getStandardRangeInfo(f, patientAge, patientGender);
+        return evaluateStatus(values[`${si}_${f.name}`], rangeInfo);
       }),
   );
-  const abnormalCount = numStatuses.filter((s) => s === "high" || s === "low").length;
-  const normalCount = numStatuses.filter((s) => s === "normal").length;
+  const abnormalCount = numStatuses.filter((s) => s && (s.status === "high" || s.status === "low")).length;
+  const normalCount = numStatuses.filter((s) => s && s.status === "normal").length;
 
   if (!hasFields) {
     return (

@@ -11,6 +11,15 @@ const invoiceService = {
     if (endDate) params.append("endDate", endDate);
     return api.get(`/invoice/all?${params}`);
   },
+  // DB-side aggregation for the ledger totals (মোট বিলকৃত / আদায় / বাকি) and
+  // invoice count over the FULL selected date range — independent of
+  // whatever single page of `getInvoices` happens to be loaded in the UI.
+  getInvoiceSummary: ({ startDate = null, endDate = null } = {}) => {
+    const params = new URLSearchParams();
+    if (startDate) params.append("startDate", startDate);
+    if (endDate) params.append("endDate", endDate);
+    return api.get(`/invoice/summary?${params}`);
+  },
   getInvoiceByInvoiceId: (_id) => api.get(`/invoice/${_id}`),
   // Lean fetch for the Reports page — patient info, amounts, and per-test
   // status + dates only. No report body, no referrer, no schema details.

@@ -11,6 +11,7 @@ import {
   Activity,
   MapPin,
   Phone,
+  Mail,
   Home as HomeIcon,
   ArrowLeftRight,
   Percent,
@@ -229,7 +230,7 @@ const DIAGNOSTIC_NAV = [
   {
     to: "/manage-referrers",
     icon: Users,
-    label: "মিডিয়া",
+    label: "মিডিয়া",
     color: "text-fuchsia-600",
     bg: "bg-fuchsia-50",
     module: "setup",
@@ -275,12 +276,21 @@ const Home = () => {
   const labName = lab?.name ?? "—";
   const labId = lab?.labKey ?? "—";
   const labAddress = lab?.contact?.address ?? "—";
-  const labPhone = lab?.contact?.primary ?? "—";
+  // Combined phone string — "017..., 018..." when there are two distinct
+  // numbers (comma-separated), de-duplicated so an identical primary/
+  // secondary pair (or a missing secondary) just shows the one number
+  // instead of repeating it.
+  const labPhone =
+    [lab?.contact?.primary, lab?.contact?.secondary].filter((v, i, arr) => v && arr.indexOf(v) === i).join(", ") || "—";
+  const labEmail = lab?.contact?.publicEmail ?? "—";
   const isLabActive = lab?.isActive ?? false;
   const isHospital = lab?.type === "hospital";
+  // Raw sanitized SVG markup for the lab's logo — used both as a small mark
+  // beside the lab name and, much larger and near-transparent, as a
+  // watermark behind the whole lab card. Null when the lab hasn't set one.
+  const labLogo = lab?.decoration?.logo || null;
 
   const userName = user?.name ?? "ব্যবহারকারী";
-  const userRole = user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : "—";
 
   const greeting = getGreeting();
   const greetingEmoji = greeting === "শুভ সকাল" ? "☀️" : greeting === "শুভ দুপুর" ? "🌤️" : "🌙";
@@ -306,49 +316,58 @@ const Home = () => {
             style={{ background: "radial-gradient(circle at top right, #818cf8, transparent 70%)" }}
           />
 
-          <div className="p-6">
-            {/* ── Top: greeting + badges ── */}
-            <div className="flex items-start justify-between gap-4 flex-wrap">
-              <div>
-                <div className="flex items-center gap-2.5 mb-1">
-                  <span className="text-xl">{greetingEmoji}</span>
-                  <span className="text-sm font-bold text-indigo-500 tracking-widest font-noto">{greeting}</span>
-                  <span className="flex items-center gap-1.5 bg-indigo-50/70 border border-indigo-100 rounded-lg px-2 py-1">
-                    <Activity className="w-3 h-3 text-emerald-500" />
-                    <span className="text-xs font-mono font-bold text-gray-700 tabular-nums font-noto">{clock}</span>
-                  </span>
-                </div>
-                <h1 className="text-3xl font-black text-gray-900 leading-tight tracking-tight font-noto">
-                  স্বাগতম, {userName}
-                </h1>
-              </div>
+          {/* Logo watermark — large, near-transparent, centered behind the
+              whole card. pointer-events-none so it never intercepts
+              clicks/taps on anything above it. */}
+          {labLogo && (
+            <div
+              className="absolute inset-0 flex items-center justify-center opacity-[0.08] pointer-events-none [&>svg]:w-[22rem] [&>svg]:h-[22rem] [&>svg]:max-w-none"
+              dangerouslySetInnerHTML={{ __html: labLogo }}
+            />
+          )}
 
-              <div className="flex flex-col items-end gap-2 shrink-0">
-                <div className="px-3 py-1.5 bg-indigo-50 border border-indigo-100 rounded-xl text-right">
-                  <p className="text-[11px] text-indigo-400 font-bold tracking-widest leading-none font-noto">Lab ID</p>
-                  <p className="text-base font-black text-indigo-700 leading-tight mt-0.5 font-noto">{labId}</p>
-                </div>
-                {isLabActive ? (
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 border border-emerald-100 rounded-full">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    <span className="text-[10px] font-bold text-emerald-600 font-noto">Active</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-rose-50 border border-rose-100 rounded-full">
-                    <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
-                    <span className="text-[10px] font-bold text-rose-600 font-noto">Inactive</span>
-                  </div>
-                )}
-              </div>
+          <div className="p-6 relative z-10">
+            {/* ── Top: greeting chip + Lab ID + status, all in one row ── */}
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <span className="text-xl">{greetingEmoji}</span>
+              <span className="text-sm font-bold text-indigo-500 tracking-widest font-noto">{greeting}</span>
+              <span className="flex items-center gap-1.5 bg-indigo-50/70 border border-indigo-100 rounded-lg px-2 py-1">
+                <Activity className="w-3 h-3 text-emerald-500 shrink-0" />
+                <span className="text-xs font-bold text-gray-700 tabular-nums font-noto min-w-[92px] inline-block text-center shrink-0 whitespace-nowrap">
+                  {clock}
+                </span>
+              </span>
+
+              <span className="flex items-center gap-1.5 bg-indigo-50 border border-indigo-100 rounded-lg px-2.5 py-1">
+                <span className="text-[10px] text-indigo-400 font-bold tracking-widest font-noto">Lab ID</span>
+                <span className="text-sm font-black text-indigo-700 font-noto">{labId}</span>
+              </span>
+
+              {isLabActive ? (
+                <span className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 border border-emerald-100 rounded-full">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="text-[10px] font-bold text-emerald-600 font-noto">Active</span>
+                </span>
+              ) : (
+                <span className="flex items-center gap-1.5 px-2.5 py-1 bg-rose-50 border border-rose-100 rounded-full">
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
+                  <span className="text-[10px] font-bold text-rose-600 font-noto">Inactive</span>
+                </span>
+              )}
             </div>
 
-            {/* ── Lab name + contact ── */}
+            {/* ── Lab name + logo + contact ── */}
             <div className="mt-4 mb-4 pl-0.5">
-              <p className="text-xs font-bold text-indigo-400 tracking-widest mb-1 font-noto">
-                {isHospital ? "আপনার হাসপাতাল" : "আপনার ল্যাব"}
-              </p>
-              <p className="text-lg font-black text-gray-800 leading-snug font-noto">{labName}</p>
-              <div className="flex items-center flex-wrap gap-x-4 gap-y-1 mt-1.5">
+              <div className="flex items-center gap-3">
+                {labLogo && (
+                  <div
+                    className="w-11 h-11 shrink-0 [&>svg]:w-full [&>svg]:h-full"
+                    dangerouslySetInnerHTML={{ __html: labLogo }}
+                  />
+                )}
+                <p className="text-3xl font-black text-gray-800 leading-snug font-noto">{labName}</p>
+              </div>
+              <div className="mt-1.5 space-y-1">
                 <div className="flex items-center gap-1.5">
                   <MapPin className="w-3 h-3 text-gray-300" />
                   <span className="text-[11px] text-gray-400 font-noto">{labAddress}</span>
@@ -357,21 +376,17 @@ const Home = () => {
                   <Phone className="w-3 h-3 text-gray-300" />
                   <span className="text-[11px] text-gray-400 font-noto">{labPhone}</span>
                 </div>
+                <div className="flex items-center gap-1.5">
+                  <Mail className="w-3 h-3 text-gray-300" />
+                  <span className="text-[11px] text-gray-400 font-noto">{labEmail}</span>
+                </div>
               </div>
             </div>
 
             {/* ── Stats strip ── */}
-            <div className="pt-4 border-t border-gray-50 grid grid-cols-3 gap-4">
-              {[
-                { label: "লগইন করেছেন", value: userName },
-                { label: "ভূমিকা", value: userRole },
-                { label: "প্রতিষ্ঠানের ধরন", value: isHospital ? "Hospital" : "ডায়াগনস্টিক সেন্টার" },
-              ].map(({ label, value }) => (
-                <div key={label}>
-                  <p className="text-xs text-gray-400 tracking-wide font-semibold font-noto">{label}</p>
-                  <p className="text-sm font-bold text-gray-700 mt-0.5 font-noto">{value}</p>
-                </div>
-              ))}
+            <div className="pt-4 border-t border-gray-50">
+              <p className="text-xs text-gray-400 tracking-wide font-semibold font-noto">লগইন করেছেন</p>
+              <p className="text-sm font-bold text-gray-700 mt-0.5 font-noto">{userName}</p>
             </div>
           </div>
         </div>

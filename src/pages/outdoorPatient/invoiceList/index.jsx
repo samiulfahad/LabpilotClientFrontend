@@ -2,7 +2,7 @@
  * useCallback / useMemo are intentionally absent throughout this file.
  * babel-plugin-react-compiler handles all memoization automatically.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   FileText,
   CheckCircle2,
@@ -33,6 +33,8 @@ import {
   Search,
   Cake,
   VenusAndMars,
+  Stethoscope,
+  Users,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import Popup from "../../../components/popup";
@@ -92,6 +94,16 @@ const isDelivered = (inv) => inv.delivery?.status === true;
 const getTests = (inv) => inv.tests ?? [];
 const hasReportSchemas = (inv) => getTests(inv).some((t) => t.schemaId);
 
+// Strips everything except letters/digits and lowercases, so search is
+// forgiving of punctuation/spacing differences — e.g. typing "drc" matches
+// a patient/doctor name stored as "Dr. C", "dr c", "DR-C", etc. Frontend-only,
+// applied to both the typed query and the fields being matched against.
+const normalize = (s) =>
+  (s ?? "")
+    .toString()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]/gu, "");
+
 // Clipboard helper — uses the async Clipboard API where available and falls
 // back to the legacy execCommand approach for non-secure contexts / older webviews.
 const copyToClipboard = async (text) => {
@@ -147,6 +159,9 @@ const PAYMENT_MODES = [
 // only, hard-capped at 11 chars) and again before submit.
 const PHONE_LENGTH = 11;
 const isValidPhone = (value) => new RegExp(`^\\d{${PHONE_LENGTH}}$`).test((value || "").trim());
+
+// "All" sentinel used by the doctor/referrer filter dropdowns.
+const FILTER_ALL = "__all__";
 
 // ─── Copy Invoice ID Button ───────────────────────────────────────────────────
 
@@ -379,6 +394,7 @@ const InvoiceCard = ({
   onError,
   onSuccess,
   onNetworkError,
+  fromBackendSearch = false,
 }) => {
   const { date, time } = formatDateTime(invoice.createdAt);
   const [confirming, setConfirming] = useState(false);
@@ -391,6 +407,8 @@ const InvoiceCard = ({
   const delivered = isDelivered(invoice);
   const hasReports = hasReportSchemas(invoice);
   const patient = invoice.patient;
+  const doctorName = invoice.doctor?.name;
+  const referrerName = invoice.referrer?.name;
 
   const handleConfirmDelivery = async () => {
     setConfirming(false);
@@ -466,6 +484,15 @@ const InvoiceCard = ({
 
       <div className="no-print">
         <div className="bg-white shadow-sm border border-gray-100 hover:shadow-md hover:border-indigo-100 transition-all duration-200 overflow-hidden">
+          {fromBackendSearch && (
+            <div className="mx-4 mt-3.5 px-3 py-2 rounded-lg bg-blue-50 border border-blue-100 flex items-start gap-2">
+              <Search className="w-3.5 h-3.5 text-blue-500 shrink-0 mt-0.5" />
+              <p className="text-[11px] text-blue-700 leading-snug">
+                ইনভয়েস <span className="font-bold">#{invoice.invoiceId}</span> নির্ধারিত সময়সীমার বাইরে পাওয়া গেছে —{" "}
+                {date} তারিখে {time} এ তৈরি হয়েছিল।
+              </p>
+            </div>
+          )}
           {/* Header */}
           <div className="flex items-center gap-3 px-4 pt-3.5 pb-3">
             <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shrink-0 shadow-sm">
@@ -479,6 +506,20 @@ const InvoiceCard = ({
                   <span className="text-gray-300 hidden sm:inline"> · by {invoice.createdBy.name}</span>
                 )}
               </p>
+              {(doctorName || referrerName) && (
+                <p className="text-[11px] text-gray-400 mt-0.5 truncate flex items-center gap-2">
+                  {doctorName && (
+                    <span className="inline-flex items-center gap-1">
+                      <Stethoscope className="w-3 h-3 text-slate-400" /> {doctorName}
+                    </span>
+                  )}
+                  {referrerName && (
+                    <span className="inline-flex items-center gap-1" title="Media">
+                      <Users className="w-3 h-3 text-slate-400" /> {referrerName}
+                    </span>
+                  )}
+                </p>
+              )}
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
               {fullyPaid ? (
@@ -553,6 +594,31 @@ const InvoiceCard = ({
   );
 };
 
+// ─── Filter select (doctor / referrer) ─────────────────────────────────────
+// Options come from whatever's already in the loaded `invoices` array — never
+// from /invoice/doctors or /invoice/required-data, which return the lab's
+// entire doctor/referrer roster (hundreds of records) regardless of whether
+// they were ever actually used on an invoice.
+
+const FilterSelect = ({ icon: Icon, value, onChange, options, counts, placeholder }) => (
+  <div className="relative flex-1 min-w-[140px]">
+    <Icon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="w-full appearance-none pl-8 pr-7 py-2.5 text-xs font-medium bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-slate-600"
+    >
+      <option value={FILTER_ALL}>{placeholder}</option>
+      {options.map((opt) => (
+        <option key={opt} value={opt}>
+          {opt} {counts?.[opt] ? `(${counts[opt]})` : ""}
+        </option>
+      ))}
+    </select>
+    <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+  </div>
+);
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 const InvoiceList = () => {
@@ -578,10 +644,52 @@ const InvoiceList = () => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [timeRange, setTimeRange] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [doctorFilter, setDoctorFilter] = useState(FILTER_ALL);
+  const [referrerFilter, setReferrerFilter] = useState(FILTER_ALL);
+
+  // Ledger totals (মোট বিলকৃত / আদায় / বাকি) and the invoice count shown in
+  // the header come from a dedicated DB aggregation over the FULL selected
+  // date range — not from whatever page of 20 happens to be loaded.
+  const [summary, setSummary] = useState({ count: 0, totalBilled: 0, totalPaid: 0, totalDue: 0 });
+  const [summaryLoading, setSummaryLoading] = useState(true);
+
+  // Sentinel element for infinite scroll — replaces the old "Load more" button.
+  const sentinelRef = useRef(null);
+
+  // Backend search fallback — only kicks in when the text search (name / id
+  // / phone) matches nothing among the invoices already loaded for the
+  // current date range. Hits GET /invoice/search, which isn't date-bound.
+  const [searchResults, setSearchResults] = useState(null); // null = not searched
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState(null);
+  const [deletedInvoiceNotice, setDeletedInvoiceNotice] = useState(null);
+
+  const loadSummary = async (range = timeRange) => {
+    try {
+      setSummaryLoading(true);
+      const { data } = await invoiceService.getInvoiceSummary({
+        startDate: range?.start,
+        endDate: range?.end,
+      });
+      setSummary({
+        count: data.count ?? 0,
+        totalBilled: data.totalBilled ?? 0,
+        totalPaid: data.totalPaid ?? 0,
+        totalDue: data.totalDue ?? 0,
+      });
+    } catch (err) {
+      // Secondary data — a failed summary shouldn't block the invoice list
+      // itself, so this doesn't raise a popup. Network issues still flip the
+      // shared offline banner since loadInvoices will hit the same problem.
+      if (isNetworkError(err)) setNetworkError(true);
+    } finally {
+      setSummaryLoading(false);
+    }
+  };
 
   const loadInvoices = async (cursor = null, replace = true, range = timeRange) => {
     try {
-      replace ? setInitialLoading(true) : (setLoadingMore(true), setLoadingMessage("Loading more invoices..."));
+      replace ? setInitialLoading(true) : setLoadingMore(true);
       const { data } = await invoiceService.getInvoices({
         cursor,
         limit: 20,
@@ -590,6 +698,15 @@ const InvoiceList = () => {
       setInvoices((prev) => (replace ? data.invoices : [...prev, ...data.invoices]));
       setNextCursor(data.nextCursor);
       setHasMore(data.hasMore);
+      // Loaded data changed — previously-picked doctor/referrer may not
+      // exist in the new set, so reset back to "all" on a fresh fetch.
+      if (replace) {
+        setDoctorFilter(FILTER_ALL);
+        setReferrerFilter(FILTER_ALL);
+        setSearchResults(null);
+        setSearchError(null);
+        setDeletedInvoiceNotice(null);
+      }
     } catch (err) {
       if (isNetworkError(err)) {
         setNetworkError(true);
@@ -599,7 +716,6 @@ const InvoiceList = () => {
     } finally {
       setInitialLoading(false);
       setLoadingMore(false);
-      setLoadingMessage(null);
     }
   };
 
@@ -608,6 +724,7 @@ const InvoiceList = () => {
     const initial = { start: new Date(now).setHours(0, 0, 0, 0), end: new Date(now).setHours(23, 59, 59, 999) };
     setTimeRange(initial);
     loadInvoices(null, true, initial);
+    loadSummary(initial);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -616,26 +733,135 @@ const InvoiceList = () => {
     setTimeRange(range);
     setStatusFilter("all");
     loadInvoices(null, true, range);
+    loadSummary(range);
   };
 
-  const total = invoices.length;
-  const totalPaid = invoices.reduce((s, inv) => s + (inv.amount?.paid ?? 0), 0);
-  const totalDue = invoices.reduce((s, inv) => s + getDue(inv), 0);
-  const totalBilled = invoices.reduce((s, inv) => s + (inv.amount?.final ?? 0), 0);
+  // ── Backend search fallback ──────────────────────────────────────────────
+  // Only fires when: the text search has ≥2 chars, it matches nothing among
+  // the invoices already loaded for the current date range, and neither the
+  // doctor nor media filter is active (those only make sense against loaded
+  // data). Debounced so it doesn't fire on every keystroke.
+  useEffect(() => {
+    const term = searchTerm.trim();
+
+    if (term.length < 2 || doctorFilter !== FILTER_ALL || referrerFilter !== FILTER_ALL) {
+      setSearchResults(null);
+      setSearching(false);
+      setSearchError(null);
+      setDeletedInvoiceNotice(null);
+      return;
+    }
+
+    const q = normalize(term);
+    const localMatches = invoices.some(
+      (inv) =>
+        normalize(inv.patient?.name).includes(q) ||
+        normalize(inv.invoiceId).includes(q) ||
+        normalize(inv.patient?.contactNumber).includes(q),
+    );
+    if (localMatches) {
+      setSearchResults(null);
+      setSearching(false);
+      setSearchError(null);
+      setDeletedInvoiceNotice(null);
+      return;
+    }
+
+    setSearching(true);
+    setSearchError(null);
+    const timer = setTimeout(async () => {
+      try {
+        const { data } = await invoiceService.searchInvoices(term);
+        setSearchResults(data.results || []);
+        setDeletedInvoiceNotice(data.deletedInvoice || null);
+      } catch (err) {
+        setSearchResults([]);
+        setDeletedInvoiceNotice(null);
+        if (isNetworkError(err)) {
+          setSearchError("ইন্টারনেট সংযোগ নেই। দয়া করে সংযোগ চেক করুন।");
+        } else {
+          setSearchError(getErrorMessage(err, "অনুসন্ধান ব্যর্থ হয়েছে, আবার চেষ্টা করুন।"));
+        }
+      } finally {
+        setSearching(false);
+      }
+    }, 450);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm, doctorFilter, referrerFilter]);
+
+  // Doctor / referrer (labeled "Media" in the UI, matching the "মিডিয়া"
+  // section in InvoiceDetailsModal) options derived purely from the invoices
+  // currently in memory — a lab may have 200 doctors and 300 referrers on
+  // file, but only whichever handful actually appear across these invoices
+  // show up here. Each option's bracketed number is how many of the loaded
+  // invoices (i.e. patients) are tied to that doctor/referrer.
+  const doctorCounts = {};
+  const referrerCounts = {};
+  invoices.forEach((inv) => {
+    const d = inv.doctor?.name;
+    const r = inv.referrer?.name;
+    if (d) doctorCounts[d] = (doctorCounts[d] || 0) + 1;
+    if (r) referrerCounts[r] = (referrerCounts[r] || 0) + 1;
+  });
+  const doctorOptions = Object.keys(doctorCounts).sort((a, b) => a.localeCompare(b));
+  const referrerOptions = Object.keys(referrerCounts).sort((a, b) => a.localeCompare(b));
 
   const filteredInvoices = invoices
     .filter((inv) =>
       statusFilter === "pending" ? !isFullyPaid(inv) : statusFilter === "paid" ? isFullyPaid(inv) : true,
     )
+    .filter((inv) => (doctorFilter === FILTER_ALL ? true : inv.doctor?.name === doctorFilter))
+    .filter((inv) => (referrerFilter === FILTER_ALL ? true : inv.referrer?.name === referrerFilter))
     .filter((inv) => {
       if (!searchTerm.trim()) return true;
-      const q = searchTerm.trim().toLowerCase();
+      const q = normalize(searchTerm);
       return (
-        inv.patient?.name?.toLowerCase().includes(q) ||
-        inv.invoiceId?.toLowerCase().includes(q) ||
-        inv.patient?.contactNumber?.includes(q)
+        normalize(inv.patient?.name).includes(q) ||
+        normalize(inv.invoiceId).includes(q) ||
+        normalize(inv.patient?.contactNumber).includes(q)
       );
     });
+
+  // When the loaded (date-range-bound) invoices have no match, fall back to
+  // whatever GET /invoice/search turned up — still respecting the active
+  // status chip so "বাকি"/"পরিশোধিত" stay meaningful.
+  const backendFallbackResults = (searchResults ?? []).filter((inv) =>
+    statusFilter === "pending" ? !isFullyPaid(inv) : statusFilter === "paid" ? isFullyPaid(inv) : true,
+  );
+  const usingBackendFallback = filteredInvoices.length === 0 && backendFallbackResults.length > 0;
+  const displayInvoices = usingBackendFallback ? backendFallbackResults : filteredInvoices;
+
+  // Serial numbers count DOWN from the DB total, matching real invoice
+  // order: the newest invoice shown (top of the list) gets the highest
+  // number, decreasing by 1 per older invoice — e.g. 15, 14, 13, 12…
+  // `invoices` is already newest-first (server sorts by createdAt desc), so
+  // position 0 in that array is the true "last" invoice of the range.
+  // Backend-fallback search results (outside this date range) aren't in
+  // that map, so they fall back to their position within the search results.
+  const totalCount = summary.count || invoices.length;
+  const serialByInvoiceId = new Map(invoices.map((inv, i) => [inv.invoiceId, totalCount - i]));
+
+  // ── Infinite scroll ───────────────────────────────────────────────────────
+  // Replaces the old manual "Load more" button — fetches the next page
+  // automatically once the sentinel at the bottom of the list scrolls into
+  // view. Only active for the plain, unfiltered date-range list; filtered
+  // views and backend-fallback search results don't auto-paginate.
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node || !hasMore || loadingMore || usingBackendFallback) return;
+    if (statusFilter !== "all" || doctorFilter !== FILTER_ALL || referrerFilter !== FILTER_ALL) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) loadInvoices(nextCursor, false);
+      },
+      { rootMargin: "200px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasMore, loadingMore, nextCursor, usingBackendFallback, statusFilter, doctorFilter, referrerFilter]);
 
   const headingLabel = (() => {
     if (!timeRange) return "";
@@ -660,29 +886,51 @@ const InvoiceList = () => {
     return `${s.toLocaleString("en-US", { month: "short", day: "numeric" })} – ${e.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
   })();
 
-  // Optimistic updates
+  // Optimistic updates — applied to `invoices` AND `searchResults`, since a
+  // card the user is acting on may currently be rendered from either array
+  // (backend fallback results live outside the date-bound `invoices` list).
+  const patchInvoiceEverywhere = (id, patch) => {
+    setInvoices((prev) => prev.map((inv) => (inv.invoiceId === id ? patch(inv) : inv)));
+    setSearchResults((prev) => (prev ? prev.map((inv) => (inv.invoiceId === id ? patch(inv) : inv)) : prev));
+  };
+
   const handleDelivered = (id) =>
-    setInvoices((prev) =>
-      prev.map((inv) => (inv.invoiceId === id ? { ...inv, delivery: { ...inv.delivery, status: true } } : inv)),
-    );
+    patchInvoiceEverywhere(id, (inv) => ({ ...inv, delivery: { ...inv.delivery, status: true } }));
 
   const handleCollected = (id, collectedAmount) =>
-    setInvoices((prev) =>
-      prev.map((inv) =>
-        inv.invoiceId === id
-          ? {
-              ...inv,
-              amount: {
-                ...inv.amount,
-                paid: Math.min(inv.amount.final, (inv.amount.paid || 0) + collectedAmount),
-              },
-            }
-          : inv,
-      ),
-    );
+    patchInvoiceEverywhere(id, (inv) => ({
+      ...inv,
+      amount: {
+        ...inv.amount,
+        paid: Math.min(inv.amount.final, (inv.amount.paid || 0) + collectedAmount),
+      },
+    }));
 
-  const handlePatientUpdated = (id, fields) =>
-    setInvoices((prev) => prev.map((inv) => (inv.invoiceId === id ? { ...inv, ...fields } : inv)));
+  const handlePatientUpdated = (id, fields) => patchInvoiceEverywhere(id, (inv) => ({ ...inv, ...fields }));
+
+  // Doctor and Media filters are mutually exclusive — picking one resets the
+  // other back to "all" rather than combining both filters at once.
+  const handleDoctorFilterChange = (value) => {
+    setDoctorFilter(value);
+    if (value !== FILTER_ALL) setReferrerFilter(FILTER_ALL);
+  };
+  const handleReferrerFilterChange = (value) => {
+    setReferrerFilter(value);
+    if (value !== FILTER_ALL) setDoctorFilter(FILTER_ALL);
+  };
+
+  const hasActiveFilters =
+    searchTerm.trim() || statusFilter !== "all" || doctorFilter !== FILTER_ALL || referrerFilter !== FILTER_ALL;
+
+  const clearFilters = () => {
+    setSearchTerm("");
+    setStatusFilter("all");
+    setDoctorFilter(FILTER_ALL);
+    setReferrerFilter(FILTER_ALL);
+    setSearchResults(null);
+    setSearchError(null);
+    setDeletedInvoiceNotice(null);
+  };
 
   return (
     <section className="min-h-screen bg-slate-50 pb-8 font-noto">
@@ -714,7 +962,9 @@ const InvoiceList = () => {
             </Link>
             <div className="min-w-0">
               <h1 className="text-base font-bold text-slate-900 truncate">ইনভয়েস তালিকা</h1>
-              <p className="text-[11px] text-slate-400 truncate">{fmtNum(total)}টি ইনভয়েস</p>
+              <p className="text-[11px] text-slate-400 truncate">
+                {summaryLoading ? "…" : fmtNum(summary.count)}টি ইনভয়েস
+              </p>
             </div>
           </div>
           <button
@@ -746,13 +996,18 @@ const InvoiceList = () => {
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-2">
-                <SummaryStat label="মোট বিলকৃত" value={fmt(totalBilled)} />
-                <SummaryStat label="আদায়" value={fmt(totalPaid)} tone="green" />
-                <SummaryStat label="বাকি" value={fmt(totalDue)} tone={totalDue > 0 ? "red" : "green"} />
+                <SummaryStat label="মোট বিলকৃত" value={fmt(summary.totalBilled)} loading={summaryLoading} />
+                <SummaryStat label="আদায়" value={fmt(summary.totalPaid)} tone="green" loading={summaryLoading} />
+                <SummaryStat
+                  label="বাকি"
+                  value={fmt(summary.totalDue)}
+                  tone={summary.totalDue > 0 ? "red" : "green"}
+                  loading={summaryLoading}
+                />
               </div>
             </div>
 
-            {/* Search + filter — no-print */}
+            {/* Search + filters — no-print */}
             <div className="mb-4 space-y-2 no-print">
               <div className="relative">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
@@ -764,6 +1019,7 @@ const InvoiceList = () => {
                   className="w-full pl-10 pr-3 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                 />
               </div>
+
               <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
                 {[
                   { key: "all", label: "সব" },
@@ -783,50 +1039,109 @@ const InvoiceList = () => {
                   </button>
                 ))}
               </div>
+
+              {(doctorOptions.length > 0 || referrerOptions.length > 0) && (
+                <div className="flex items-center gap-2">
+                  {doctorOptions.length > 0 && (
+                    <FilterSelect
+                      icon={Stethoscope}
+                      value={doctorFilter}
+                      onChange={handleDoctorFilterChange}
+                      options={doctorOptions}
+                      counts={doctorCounts}
+                      placeholder="সব ডাক্তার"
+                    />
+                  )}
+                  {referrerOptions.length > 0 && (
+                    <FilterSelect
+                      icon={Users}
+                      value={referrerFilter}
+                      onChange={handleReferrerFilterChange}
+                      options={referrerOptions}
+                      counts={referrerCounts}
+                      placeholder="সব মিডিয়া"
+                    />
+                  )}
+                </div>
+              )}
+
+              {hasActiveFilters && (
+                <button
+                  onClick={clearFilters}
+                  className="flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:underline"
+                >
+                  <X className="w-3 h-3" /> ফিল্টার মুছুন
+                </button>
+              )}
             </div>
 
             {/* Invoice cards */}
-            {filteredInvoices.length === 0 ? (
+            {displayInvoices.length === 0 ? (
               <div className="flex flex-col items-center justify-center gap-2 py-16 text-slate-400 bg-white rounded-2xl border border-slate-200">
-                <AlertCircle className="w-5 h-5" />
-                <p className="text-xs">
-                  {searchTerm.trim()
-                    ? "কোনো ফলাফল পাওয়া যায়নি"
-                    : statusFilter !== "all"
-                      ? "এই ফিল্টারে কোনো ইনভয়েস নেই"
-                      : "নির্ধারিত সময়সীমায় কোনো ইনভয়েস তৈরি হয়নি"}
-                </p>
+                {searching ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+                    <p className="text-xs">খোঁজা হচ্ছে...</p>
+                  </>
+                ) : deletedInvoiceNotice ? (
+                  <>
+                    <AlertCircle className="w-5 h-5 text-amber-500" />
+                    <p className="text-xs text-center px-4">
+                      ইনভয়েস <span className="font-bold text-slate-700">#{deletedInvoiceNotice.invoiceId}</span>
+                      {deletedInvoiceNotice.patientName && ` (${deletedInvoiceNotice.patientName})`} ডিলিট করা হয়েছে
+                      {deletedInvoiceNotice.deletedAt && ` — ${formatDateTimeLine(deletedInvoiceNotice.deletedAt)}`}
+                      {deletedInvoiceNotice.deletedBy && ` · by ${deletedInvoiceNotice.deletedBy}`}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <AlertCircle className="w-5 h-5" />
+                    <p className="text-xs">
+                      {hasActiveFilters ? "কোনো ফলাফল পাওয়া যায়নি" : "নির্ধারিত সময়সীমায় কোনো ইনভয়েস তৈরি হয়নি"}
+                    </p>
+                    {searchError && <p className="text-[11px] text-red-500 px-4 text-center">{searchError}</p>}
+                  </>
+                )}
               </div>
             ) : (
               <div className="space-y-3">
-                {filteredInvoices.map((invoice, index) => (
-                  <InvoiceCard
-                    key={invoice._id}
-                    invoice={invoice}
-                    index={index}
-                    onDelivered={handleDelivered}
-                    onCollected={handleCollected}
-                    onPatientUpdated={handlePatientUpdated}
-                    onLoadingChange={(msg) => setLoadingMessage(msg)}
-                    onError={(msg) => setPopup({ type: "error", message: msg })}
-                    onSuccess={(msg) => setPopup({ type: "success", message: msg })}
-                    onNetworkError={() => setNetworkError(true)}
-                  />
-                ))}
+                {displayInvoices.map((invoice, index) => {
+                  const serial = serialByInvoiceId.get(invoice.invoiceId) ?? index + 1;
+                  return (
+                    <InvoiceCard
+                      key={invoice._id}
+                      invoice={invoice}
+                      index={serial - 1}
+                      fromBackendSearch={usingBackendFallback}
+                      onDelivered={handleDelivered}
+                      onCollected={handleCollected}
+                      onPatientUpdated={handlePatientUpdated}
+                      onLoadingChange={(msg) => setLoadingMessage(msg)}
+                      onError={(msg) => setPopup({ type: "error", message: msg })}
+                      onSuccess={(msg) => setPopup({ type: "success", message: msg })}
+                      onNetworkError={() => setNetworkError(true)}
+                    />
+                  );
+                })}
               </div>
             )}
 
-            {/* Load more */}
-            {hasMore && statusFilter === "all" && (
-              <button
-                onClick={() => loadInvoices(nextCursor, false)}
-                disabled={loadingMore}
-                className="mt-4 w-full flex items-center justify-center gap-2 py-3 text-xs font-medium text-slate-500 hover:text-slate-900 border border-dashed border-slate-300 hover:border-slate-400 rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed no-print"
-              >
-                <ChevronDown className="w-3.5 h-3.5" />
-                আরো লোড করুন (+20)
-              </button>
-            )}
+            {/* Infinite-scroll sentinel — hidden while showing backend-fallback
+                results, since those aren't part of the paginated, date-bound
+                invoices list. Auto-fetches the next page when scrolled into view. */}
+            {hasMore &&
+              !usingBackendFallback &&
+              statusFilter === "all" &&
+              doctorFilter === FILTER_ALL &&
+              referrerFilter === FILTER_ALL && (
+                <div ref={sentinelRef} className="flex items-center justify-center py-6 no-print">
+                  {loadingMore && (
+                    <span className="flex items-center gap-2 text-xs text-slate-400">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" /> আরো লোড হচ্ছে...
+                    </span>
+                  )}
+                </div>
+              )}
 
             <p className="mt-4 text-center text-[10px] text-slate-400">
               শুধুমাত্র সক্রিয় (ডিলিট না হওয়া) ইনভয়েসের হিসাব অন্তর্ভুক্ত
@@ -838,12 +1153,16 @@ const InvoiceList = () => {
   );
 };
 
-const SummaryStat = ({ label, value, tone = "default" }) => {
+const SummaryStat = ({ label, value, tone = "default", loading = false }) => {
   const toneClass = tone === "green" ? "text-emerald-600" : tone === "red" ? "text-red-600" : "text-slate-900";
   return (
     <div className="bg-slate-50 rounded-xl px-2.5 py-2">
       <p className="text-[9px] uppercase tracking-wide text-slate-400 mb-0.5">{label}</p>
-      <p className={`text-xs font-bold tabular-nums truncate ${toneClass}`}>{value}</p>
+      {loading ? (
+        <div className="h-3.5 w-3/4 bg-slate-200 rounded animate-pulse" />
+      ) : (
+        <p className={`text-xs font-bold tabular-nums truncate ${toneClass}`}>{value}</p>
+      )}
     </div>
   );
 };

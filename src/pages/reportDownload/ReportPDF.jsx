@@ -16,12 +16,15 @@ const C = {
   normal: "#166534",
   low: "#92400e",
   high: "#991b1b",
+  tag: "#6d28d9",
   lowBg: "#fffbeb",
   highBg: "#fef2f2",
   normBg: "#f0fdf4",
+  tagBg: "#f5f3ff",
   lowBdr: "#fde68a",
   highBdr: "#fecaca",
   normBdr: "#bbf7d0",
+  tagBdr: "#ddd6fe",
 };
 
 const s = StyleSheet.create({
@@ -183,10 +186,30 @@ function fmtLow(num) {
   return num.toFixed(3).replace(/\.?0+$/, "");
 }
 
-function getStatusInfo(value, ref) {
-  const n = parseFloat(value);
-  if (isNaN(n) || !ref) return null;
-  const r = parseRange(ref);
+// A number field's status now comes from whichever the schema produced:
+// - referenceTag (current) — the label of the standard-range tier the value
+//   matched (e.g. "High", "Reactive", "Trace"). Status bucket comes from the
+//   label text itself; no ratio to compute since a tier isn't a single
+//   min/max span.
+// - referenceRange (legacy) — a plain "min–max" string from reports saved
+//   before the tier-based Ranges system. Falls back to the old ratio-based
+//   Higher/Lower(Nx) labeling.
+function statusFromTag(tag) {
+  const label = (tag || "").toLowerCase();
+  if (/low/.test(label)) return "low";
+  if (/high/.test(label)) return "high";
+  if (/normal|unremarkable|negative/.test(label)) return "normal";
+  return "tag";
+}
+
+function getStatusInfo(field) {
+  if (!field) return null;
+  if (field.referenceTag) {
+    return { status: statusFromTag(field.referenceTag), label: field.referenceTag };
+  }
+  const n = parseFloat(field.value);
+  if (isNaN(n) || !field.referenceRange) return null;
+  const r = parseRange(field.referenceRange);
   if (!r) return null;
   if (n > r.max) return { status: "high", label: `Higher (${fmt(n / r.max)}x)` };
   if (n < r.min) {
@@ -198,7 +221,7 @@ function getStatusInfo(value, ref) {
 
 function isResultField(field) {
   if (!field || typeof field !== "object") return false;
-  return Boolean(field.referenceRange) || Boolean(field.unit);
+  return Boolean(field.referenceRange) || Boolean(field.referenceTag) || Boolean(field.unit);
 }
 
 function getSectionEntries(sectionData) {
@@ -209,12 +232,14 @@ const ROW_COLORS = {
   high: { bg: "#fff8f8", val: C.high },
   low: { bg: "#fffdf5", val: C.low },
   normal: { bg: "white", val: C.dark },
+  tag: { bg: "#faf5ff", val: C.tag },
 };
 
 const PILL_COLORS = {
   high: { bg: C.highBg, color: C.high, border: C.highBdr },
   low: { bg: C.lowBg, color: C.low, border: C.lowBdr },
   normal: { bg: C.normBg, color: C.normal, border: C.normBdr },
+  tag: { bg: C.tagBg, color: C.tag, border: C.tagBdr },
 };
 
 function Pill({ info }) {
@@ -234,9 +259,11 @@ function PDFSection({ sectionName, sectionData, showHeader }) {
   const plainEntries = entries.filter(([, v]) => !isResultField(v));
   const hasResultTable = resultEntries.length > 0;
   const hasUnits = resultEntries.some(([, v]) => Boolean(v.unit));
-  const hasRange = resultEntries.some(([, v]) => Boolean(v.referenceRange));
+  // A section shows the Ref./Status columns if any result field carries
+  // either a legacy referenceRange or a current referenceTag.
+  const hasRefInfo = resultEntries.some(([, v]) => Boolean(v.referenceRange) || Boolean(v.referenceTag));
 
-  const W = hasRange
+  const W = hasRefInfo
     ? hasUnits
       ? { param: "32%", result: "13%", unit: "10%", ref: "22%", status: "23%" }
       : { param: "34%", result: "16%", ref: "26%", status: "24%" }
@@ -267,7 +294,7 @@ function PDFSection({ sectionName, sectionData, showHeader }) {
             <Text style={[s.th, { width: W.param }]}>Parameter</Text>
             <Text style={[s.th, { width: W.result }]}>Result</Text>
             {hasUnits && <Text style={[s.th, { width: W.unit }]}>Unit</Text>}
-            {hasRange && (
+            {hasRefInfo && (
               <>
                 <Text style={[s.th, { width: W.ref }]}>Ref. Range</Text>
                 <Text style={[s.th, { width: W.status }]}>Status</Text>
@@ -277,15 +304,19 @@ function PDFSection({ sectionName, sectionData, showHeader }) {
           {entries.map(([name, field]) => {
             if (isResultField(field)) {
               const value = String(field.value ?? "");
+              // A tier-tagged field has no stored numeric range text (only
+              // the matched tier's label, in referenceTag) — the Ref. Range
+              // column stays dashed for those; the tag's label carries the
+              // classification in the Status column instead.
               const ref = field.referenceRange || "";
-              const info = hasRange ? getStatusInfo(value, ref) : null;
+              const info = hasRefInfo ? getStatusInfo(field) : null;
               const rc = info ? (ROW_COLORS[info.status] ?? {}) : {};
               return (
                 <View key={name} style={[s.tableRow, { backgroundColor: rc.bg ?? "white" }]}>
                   <Text style={[s.td, { width: W.param }]}>{name}</Text>
                   <Text style={[s.tdBold, { width: W.result, color: rc.val ?? C.dark }]}>{value}</Text>
                   {hasUnits && <Text style={[s.tdUnit, { width: W.unit }]}>{field.unit || "—"}</Text>}
-                  {hasRange && (
+                  {hasRefInfo && (
                     <>
                       <Text style={[s.tdMono, { width: W.ref }]}>{ref || "—"}</Text>
                       <View style={{ width: W.status, justifyContent: "center", paddingHorizontal: 6 }}>
@@ -302,7 +333,7 @@ function PDFSection({ sectionName, sectionData, showHeader }) {
                 <Text style={[s.td, { width: W.param }]}>{name}</Text>
                 <Text style={[s.tdBold, { width: W.result }]}>{val || "—"}</Text>
                 {hasUnits && <Text style={[s.tdUnit, { width: W.unit }]}>—</Text>}
-                {hasRange && (
+                {hasRefInfo && (
                   <>
                     <Text style={[s.tdMono, { width: W.ref }]}>—</Text>
                     <View style={{ width: W.status, justifyContent: "center", paddingHorizontal: 6 }} />
@@ -352,7 +383,7 @@ export function ReportPDFDocument({
   sections.forEach(([, sec]) => {
     getSectionEntries(sec).forEach(([, field]) => {
       if (!isResultField(field)) return;
-      const info = getStatusInfo(field.value, field.referenceRange);
+      const info = getStatusInfo(field);
       if (!info) return;
       if (info.status === "normal") normal++;
       else if (info.status === "low") low++;

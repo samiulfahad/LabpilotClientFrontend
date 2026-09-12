@@ -20,6 +20,7 @@ import {
   CheckCircle2,
   FileText,
   Loader2,
+  Tag,
 } from "lucide-react";
 import { ReportPDFDocument } from "./ReportPDF";
 
@@ -66,10 +67,30 @@ function fmtLow(num) {
   return num.toFixed(3).replace(/\.?0+$/, "");
 }
 
-function getStatusInfo(value, ref) {
-  const n = parseFloat(value);
-  if (isNaN(n) || !ref) return null;
-  const r = parseRange(ref);
+// A number field's status comes from whichever the schema produced:
+// - referenceTag (current) — the label of the standard-range tier the value
+//   matched (e.g. "High", "Reactive", "Trace"). The status bucket comes
+//   from the label text itself; there's no ratio to compute since a tier
+//   isn't a single min/max span.
+// - referenceRange (legacy) — a plain "min–max" string from reports saved
+//   before the tier-based Ranges system. Falls back to the old ratio-based
+//   Higher/Lower(Nx) labeling.
+function statusFromTag(tag) {
+  const label = (tag || "").toLowerCase();
+  if (/low/.test(label)) return "low";
+  if (/high/.test(label)) return "high";
+  if (/normal|unremarkable|negative/.test(label)) return "normal";
+  return "tag";
+}
+
+function getStatusInfo(field) {
+  if (!field) return null;
+  if (field.referenceTag) {
+    return { status: statusFromTag(field.referenceTag), label: field.referenceTag };
+  }
+  const n = parseFloat(field.value);
+  if (isNaN(n) || !field.referenceRange) return null;
+  const r = parseRange(field.referenceRange);
   if (!r) return null;
   if (n > r.max) return { status: "high", label: `Higher (${fmt(n / r.max)}x)` };
   if (n < r.min) {
@@ -79,14 +100,14 @@ function getStatusInfo(value, ref) {
   return { status: "normal", label: "Normal" };
 }
 
-function getStatus(value, ref) {
-  const info = getStatusInfo(value, ref);
+function getStatus(field) {
+  const info = getStatusInfo(field);
   return info ? info.status : null;
 }
 
 function isResultField(field) {
   if (!field || typeof field !== "object") return false;
-  return Boolean(field.referenceRange) || Boolean(field.unit);
+  return Boolean(field.referenceRange) || Boolean(field.referenceTag) || Boolean(field.unit);
 }
 
 function getSectionEntries(sectionData) {
@@ -102,14 +123,16 @@ function escapeHtml(str) {
   );
 }
 
-function StatusPill({ value, ref }) {
-  const info = getStatusInfo(value, ref);
+function StatusPill({ field }) {
+  const info = getStatusInfo(field);
   if (!info) return <span className="text-xs text-black">—</span>;
   const cfg = {
     normal: { cls: "bg-emerald-50 text-emerald-700 border-emerald-200", Icon: CheckCircle2 },
     low: { cls: "bg-amber-50 text-amber-700 border-amber-200", Icon: TrendingDown },
     high: { cls: "bg-red-50 text-red-700 border-red-200", Icon: TrendingUp },
+    tag: { cls: "bg-violet-50 text-violet-700 border-violet-200", Icon: Tag },
   }[info.status];
+  if (!cfg) return <span className="text-xs text-black">—</span>;
   return (
     <span
       className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 border whitespace-nowrap ${cfg.cls}`}
@@ -124,13 +147,17 @@ const ROW_STYLE = {
   high: { row: "bg-red-50/40", value: "text-red-700" },
   low: { row: "bg-amber-50/40", value: "text-amber-800" },
   normal: { row: "", value: "text-black" },
+  tag: { row: "bg-violet-50/40", value: "text-violet-700" },
 };
 
-function ResultRow({ name, field, hasUnits, hasRange }) {
+function ResultRow({ name, field, hasUnits, hasRefInfo }) {
   const value = String(field.value ?? "");
   const unit = field.unit || "";
+  // A tier-tagged field has no stored numeric range text (only the matched
+  // tier's label, in referenceTag) — the Ref. Range column stays dashed for
+  // those; the tag's label carries the classification in Status instead.
   const ref = field.referenceRange || "";
-  const info = hasRange ? getStatusInfo(value, ref) : null;
+  const info = hasRefInfo ? getStatusInfo(field) : null;
   const style = info ? (ROW_STYLE[info.status] ?? {}) : {};
   return (
     <tr className={style.row ?? ""}>
@@ -145,13 +172,13 @@ function ResultRow({ name, field, hasUnits, hasRange }) {
           {unit || <span className="text-black">—</span>}
         </td>
       )}
-      {hasRange && (
+      {hasRefInfo && (
         <>
           <td className="px-3 py-2.5 text-xs font-semibold text-black border-b border-slate-100 tabular-nums font-mono">
             {ref || <span className="text-black">—</span>}
           </td>
           <td className="px-3 pr-4 py-2.5 border-b border-slate-100">
-            <StatusPill value={value} ref={ref} />
+            <StatusPill field={field} />
           </td>
         </>
       )}
@@ -164,7 +191,7 @@ function ResultRow({ name, field, hasUnits, hasRange }) {
 // (i.e. the section also has at least one result-style field). The field's
 // value goes in the Result column; Unit/Ref-Range/Status are dashed out
 // since those concepts don't apply to this field type.
-function PlainValueRow({ name, field, hasUnits, hasRange }) {
+function PlainValueRow({ name, field, hasUnits, hasRefInfo }) {
   const val = Array.isArray(field.value) ? field.value.join(", ") : String(field.value ?? "");
   return (
     <tr>
@@ -177,7 +204,7 @@ function PlainValueRow({ name, field, hasUnits, hasRange }) {
           <span className="text-black">—</span>
         </td>
       )}
-      {hasRange && (
+      {hasRefInfo && (
         <>
           <td className="px-3 py-2.5 text-xs font-semibold text-black border-b border-slate-100 tabular-nums font-mono">
             <span className="text-black">—</span>
@@ -210,20 +237,22 @@ function Section({ sectionName, sectionData, showHeader }) {
   const plainEntries = entries.filter(([, v]) => !isResultField(v));
   const hasResultTable = resultEntries.length > 0;
   const hasUnits = resultEntries.some(([, v]) => Boolean(v.unit));
-  const hasRange = resultEntries.some(([, v]) => Boolean(v.referenceRange));
+  // A section shows the Ref./Status columns if any result field carries
+  // either a legacy referenceRange or a current referenceTag.
+  const hasRefInfo = resultEntries.some(([, v]) => Boolean(v.referenceRange) || Boolean(v.referenceTag));
 
-  const paramW = hasRange ? "w-[34%]" : hasUnits ? "w-[45%]" : "w-[60%]";
-  const resultW = hasRange ? "w-[16%]" : hasUnits ? "w-[25%]" : "w-[40%]";
-  const unitW = hasRange ? "w-[12%]" : "w-[30%]";
-  const colSpan = 1 + (hasUnits ? 1 : 0) + (hasRange ? 2 : 0);
+  const paramW = hasRefInfo ? "w-[34%]" : hasUnits ? "w-[45%]" : "w-[60%]";
+  const resultW = hasRefInfo ? "w-[16%]" : hasUnits ? "w-[25%]" : "w-[40%]";
+  const unitW = hasRefInfo ? "w-[12%]" : "w-[30%]";
+  const colSpan = 1 + (hasUnits ? 1 : 0) + (hasRefInfo ? 2 : 0);
 
   // When the section has at least one result-style field (a number field
-  // with a unit/reference range), every field in the section — including
-  // radio/select/checkbox/textarea/plain-text ones — renders as a row in
-  // that same Parameter/Result/Unit/Ref-Range/Status table, with "—" filled
-  // into the columns a non-result field doesn't have. Only when no field in
-  // the section is result-style does the section fall back to the plain
-  // two-column table.
+  // with a unit/reference range/tag), every field in the section —
+  // including radio/select/checkbox/textarea/plain-text ones — renders as a
+  // row in that same Parameter/Result/Unit/Ref-Range/Status table, with "—"
+  // filled into the columns a non-result field doesn't have. Only when no
+  // field in the section is result-style does the section fall back to the
+  // plain two-column table.
   const tableBody = hasResultTable ? (
     <table className="w-full border-collapse">
       <thead>
@@ -241,7 +270,7 @@ function Section({ sectionName, sectionData, showHeader }) {
               Unit
             </th>
           )}
-          {hasRange && (
+          {hasRefInfo && (
             <>
               <th className="px-3 py-2 text-left text-[10px] font-bold text-black uppercase tracking-wider w-[24%]">
                 Ref. Range
@@ -256,9 +285,9 @@ function Section({ sectionName, sectionData, showHeader }) {
       <tbody>
         {entries.map(([n, f]) =>
           isResultField(f) ? (
-            <ResultRow key={n} name={n} field={f} hasUnits={hasUnits} hasRange={hasRange} />
+            <ResultRow key={n} name={n} field={f} hasUnits={hasUnits} hasRefInfo={hasRefInfo} />
           ) : (
-            <PlainValueRow key={n} name={n} field={f} hasUnits={hasUnits} hasRange={hasRange} />
+            <PlainValueRow key={n} name={n} field={f} hasUnits={hasUnits} hasRefInfo={hasRefInfo} />
           ),
         )}
       </tbody>
@@ -308,7 +337,7 @@ function SummaryStrip({ sections }) {
   sections.forEach(([, sec]) => {
     getSectionEntries(sec).forEach(([, field]) => {
       if (!isResultField(field)) return;
-      const s = getStatus(field.value, field.referenceRange);
+      const s = getStatus(field);
       if (s === "normal") normal++;
       else if (s === "low") low++;
       else if (s === "high") high++;
@@ -388,32 +417,11 @@ function buildPrintHTML({
   const isPad = printType === "PAD";
   const padHeightMm = labInfo.padHeight > 0 ? labInfo.padHeight : DEFAULT_PAD_HEIGHT_MM;
 
-  const statusInfo = (value, ref) => {
-    const n = parseFloat(value);
-    if (isNaN(n) || !ref) return null;
-    const m = ref.match(/^([\d.]+)\s*[–\-]\s*([\d.]+)$/);
-    if (!m) return null;
-    const min = parseFloat(m[1]),
-      max = parseFloat(m[2]);
-    const fmt = (x) =>
-      x
-        .toFixed(3)
-        .replace(/\.?0+$/, "")
-        .replace(/^0\./, ".");
-    const fmtL = (x) => x.toFixed(3).replace(/\.?0+$/, "");
-    if (n > max) return { status: "high", label: `Higher (${fmt(n / max)}x)` };
-    if (n < min) {
-      if (min === 0) return { status: "low", label: "Low" };
-      return { status: "low", label: `Lower (${fmtL(n / min)}x)` };
-    }
-    return { status: "normal", label: "Normal" };
-  };
-
-  const pillColor = (s) => ({ normal: "#166534", low: "#92400e", high: "#991b1b" })[s] || "#000000";
-  const pillBg = (s) => ({ normal: "#f0fdf4", low: "#fffbeb", high: "#fef2f2" })[s] || "white";
-  const pillBdr = (s) => ({ normal: "#bbf7d0", low: "#fde68a", high: "#fecaca" })[s] || "#e2e8f0";
-  const rowBg = (s) => ({ normal: "white", low: "#fffdf5", high: "#fff8f8" })[s] || "white";
-  const valColor = (s) => ({ normal: "#000000", low: "#92400e", high: "#991b1b" })[s] || "#000000";
+  const pillColor = (s) => ({ normal: "#166534", low: "#92400e", high: "#991b1b", tag: "#6d28d9" })[s] || "#000000";
+  const pillBg = (s) => ({ normal: "#f0fdf4", low: "#fffbeb", high: "#fef2f2", tag: "#f5f3ff" })[s] || "white";
+  const pillBdr = (s) => ({ normal: "#bbf7d0", low: "#fde68a", high: "#fecaca", tag: "#ddd6fe" })[s] || "#e2e8f0";
+  const rowBg = (s) => ({ normal: "white", low: "#fffdf5", high: "#fff8f8", tag: "#faf5ff" })[s] || "white";
+  const valColor = (s) => ({ normal: "#000000", low: "#92400e", high: "#991b1b", tag: "#6d28d9" })[s] || "#000000";
 
   const renderSection = (sectionName, sectionData) => {
     const showHeader = sectionData.__showTitle !== false;
@@ -422,18 +430,18 @@ function buildPrintHTML({
     const plainEntries = entries.filter(([, v]) => !isResultField(v));
     const hasResultTable = resultEntries.length > 0;
     const hasUnits = resultEntries.some(([, v]) => Boolean(v.unit));
-    const hasRange = resultEntries.some(([, v]) => Boolean(v.referenceRange));
+    const hasRefInfo = resultEntries.some(([, v]) => Boolean(v.referenceRange) || Boolean(v.referenceTag));
 
-    const paramW = hasRange ? "33%" : hasUnits ? "40%" : "58%";
-    const resultW = hasRange ? "15%" : hasUnits ? "30%" : "42%";
-    const unitW = hasRange ? "11%" : "30%";
-    const colSpan = 1 + (hasUnits ? 1 : 0) + (hasRange ? 2 : 0);
+    const paramW = hasRefInfo ? "33%" : hasUnits ? "40%" : "58%";
+    const resultW = hasRefInfo ? "15%" : hasUnits ? "30%" : "42%";
+    const unitW = hasRefInfo ? "11%" : "30%";
+    const colSpan = 1 + (hasUnits ? 1 : 0) + (hasRefInfo ? 2 : 0);
 
     const unitHeader = hasUnits
       ? `<th style="padding:5px 10px;text-align:left;font-size:8.5px;font-weight:700;color:#000000;text-transform:uppercase;letter-spacing:.05em;width:${unitW};">Unit</th>`
       : "";
 
-    const rangeHeaders = hasRange
+    const rangeHeaders = hasRefInfo
       ? `<th style="padding:5px 10px;text-align:left;font-size:8.5px;font-weight:700;color:#000000;text-transform:uppercase;letter-spacing:.05em;width:23%;">Ref. Range</th>
          <th style="padding:5px 10px;text-align:left;font-size:8.5px;font-weight:700;color:#000000;text-transform:uppercase;letter-spacing:.05em;width:18%;">Status</th>`
       : "";
@@ -446,18 +454,22 @@ function buildPrintHTML({
     const combinedRows = entries
       .map(([name, field]) => {
         if (isResultField(field)) {
+          // Tier-tagged fields have no stored numeric range text (only the
+          // matched tier's label, in referenceTag) — Ref. Range stays
+          // dashed for those; the tag's label carries the classification
+          // in Status instead.
           const ref = field.referenceRange || "";
-          const info = hasRange ? statusInfo(field.value, ref) : null;
-          const s = info ? info.status : null;
-          const rangeCells = hasRange
+          const info = hasRefInfo ? getStatusInfo(field) : null;
+          const st = info ? info.status : null;
+          const rangeCells = hasRefInfo
             ? `<td style="padding:6px 10px;font-size:10.5px;color:#000000;font-weight:600;border-bottom:1px solid #f1f5f9;font-family:monospace;">${ref || "—"}</td>
         <td style="padding:6px 10px;border-bottom:1px solid #f1f5f9;">
-          <span style="font-size:8.5px;font-weight:700;padding:2px 7px;background:${pillBg(s)};color:${pillColor(s)};border:1px solid ${pillBdr(s)};">${info ? info.label : "—"}</span>
+          <span style="font-size:8.5px;font-weight:700;padding:2px 7px;background:${pillBg(st)};color:${pillColor(st)};border:1px solid ${pillBdr(st)};">${info ? info.label : "—"}</span>
         </td>`
             : "";
-          return `<tr style="background:${rowBg(s)};">
+          return `<tr style="background:${rowBg(st)};">
         <td style="padding:6px 10px;font-size:11.5px;font-weight:600;color:#000000;border-bottom:1px solid #f1f5f9;">${name}</td>
-        <td style="padding:6px 10px;font-size:11.5px;font-weight:700;color:${valColor(s)};border-bottom:1px solid #f1f5f9;font-family:monospace;">${field.value}</td>
+        <td style="padding:6px 10px;font-size:11.5px;font-weight:700;color:${valColor(st)};border-bottom:1px solid #f1f5f9;font-family:monospace;">${field.value}</td>
         ${hasUnits ? `<td style="padding:6px 10px;font-size:9px;font-weight:700;color:#000000;text-transform:uppercase;border-bottom:1px solid #f1f5f9;">${field.unit || "—"}</td>` : ""}
         ${rangeCells}
       </tr>`;
@@ -468,7 +480,7 @@ function buildPrintHTML({
         <td style="padding:6px 10px;font-size:11.5px;font-weight:600;color:#000000;border-bottom:1px solid #f1f5f9;">${name}</td>
         <td style="padding:6px 10px;font-size:11.5px;font-weight:700;color:#000000;border-bottom:1px solid #f1f5f9;">${val || "—"}</td>
         ${hasUnits ? dash : ""}
-        ${hasRange ? `${dash}<td style="padding:6px 10px;border-bottom:1px solid #f1f5f9;"><span style="font-size:8.5px;font-weight:700;padding:2px 7px;color:#000000;">—</span></td>` : ""}
+        ${hasRefInfo ? `${dash}<td style="padding:6px 10px;border-bottom:1px solid #f1f5f9;"><span style="font-size:8.5px;font-weight:700;padding:2px 7px;color:#000000;">—</span></td>` : ""}
       </tr>`;
       })
       .join("");
@@ -531,7 +543,7 @@ function buildPrintHTML({
   sections.forEach(([, sec]) => {
     getSectionEntries(sec).forEach(([, field]) => {
       if (!isResultField(field)) return;
-      const s = getStatus(field.value, field.referenceRange);
+      const s = getStatus(field);
       if (s === "normal") normal++;
       else if (s === "low") low++;
       else if (s === "high") high++;
