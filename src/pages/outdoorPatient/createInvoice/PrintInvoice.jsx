@@ -32,8 +32,8 @@ const formatDateTime = (ts) => {
   };
 };
 
-// "12PM, 10th Sep 2026" — Date and Time merged into a single "Time" field,
-// with an ordinal suffix on the day.
+// "12:12 PM, 20th June, 2026" — Date and Time merged into a single "Time"
+// field, with an ordinal suffix on the day and the full month name.
 const formatDateTimeMerged = (ts) => {
   const d = new Date(ts);
   const day = d.getDate();
@@ -45,13 +45,13 @@ const formatDateTimeMerged = (ts) => {
         : day % 10 === 3 && day !== 13
           ? "rd"
           : "th";
-  const month = d.toLocaleString("default", { month: "short" });
+  const month = d.toLocaleString("default", { month: "long" });
   const year = d.getFullYear();
   const h = d.getHours();
   const hour12 = h % 12 === 0 ? 12 : h % 12;
   const minutes = String(d.getMinutes()).padStart(2, "0");
   const ampm = h >= 12 ? "PM" : "AM";
-  return `${hour12}:${minutes}${ampm}, ${day}${suffix} ${month} ${year}`;
+  return `${hour12}:${minutes} ${ampm}, ${day}${suffix} ${month}, ${year}`;
 };
 
 // Gender shown as a single letter next to the patient's name — "male"/"female"
@@ -271,10 +271,6 @@ const isNetworkError = (err) => err?.isAxiosError === true && !err.response;
 // left/right margins stay identical all the way down the page.
 
 const PAGE_MARGIN = 18;
-// Shared vertical gap between the three stacked rows in the patient box
-// (Invoice ID/Age, Name+Gender/Contact+Time, and Doctor's Name) — one
-// constant so all three gaps stay equal instead of drifting independently.
-const PATIENT_ROW_GAP = 6;
 
 const pdf$ = StyleSheet.create({
   page: {
@@ -288,8 +284,8 @@ const pdf$ = StyleSheet.create({
     paddingRight: PAGE_MARGIN,
   },
   // header — centered, white bg, black text. Invoice ID / date / time no
-  // longer live up here — ID moved into the patient grid, date/time moved
-  // into the patient grid too — so this is now just the lab identity block.
+  // longer live up here — ID moved into the patient box, date/time moved
+  // into the patient box too — so this is now just the lab identity block.
   header: {
     alignItems: "center",
     borderBottom: "1.5 solid #e5e7eb",
@@ -349,47 +345,37 @@ const pdf$ = StyleSheet.create({
   // sections — horizontal inset now comes solely from the page padding
   section: { paddingTop: 12, paddingBottom: 12, borderBottom: "1 solid #e5e7eb" },
   sectionLast: { paddingTop: 4 },
-  // Patient info block — no border; spacing/padding still separates it from
-  // the header above and the item table below. Tightened further (6/6/6 ->
-  // 3/3/3) so the gap to the header above and the item table below is
-  // minimal on print/download/share output.
+
+  // ── Patient info box ────────────────────────────────────────────────────
+  // Single bordered card: fields stacked on the left, a vertical divider,
+  // then the QR code on the right — matches the reference layout while
+  // staying on the A5 page.
   patientBox: {
     marginTop: 3,
     marginBottom: 3,
-    padding: 3,
+    border: "1.5 solid #000000",
+    borderRadius: 0,
+    padding: 8,
+    flexDirection: "row",
+    alignItems: "stretch",
   },
-  // Invoice ID and Age stack in the same left column (Age lines up directly
-  // under Invoice ID). Name/Gender and Contact/Time stack in the column to
-  // its right, in the same way. Doctor's Name (when present) still spans
-  // the full box width below both columns.
-  patientRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  patientGrid: { flex: 1, flexDirection: "row", flexWrap: "wrap" },
-  patientFieldFull: { width: "100%", marginBottom: 6 },
-  patientHeaderRow: { flexDirection: "row", alignItems: "flex-start", width: "100%" },
-  patientIdCol: { flexShrink: 0, marginRight: 14 },
-  patientIdField: { marginBottom: PATIENT_ROW_GAP },
-  patientMainCol: { flex: 1 },
-  patientTopRow: { flexDirection: "row", alignItems: "flex-start", marginBottom: PATIENT_ROW_GAP },
-  patientTopName: { flexGrow: 1, flexShrink: 1, marginRight: 14 },
-  patientTopGender: { flexShrink: 0 },
-  // flexShrink: 0 + marginRight on Contact keeps it at its natural text
-  // width and spaced from Time — Yoga's default flexShrink: 1 would
-  // otherwise squeeze the row to fit, wrapping "01726678987" mid-word.
-  // Time also gets flexShrink: 0 now (no maxWidth) so it holds its natural
-  // width and stays on one line with its label instead of wrapping — the
-  // patientBox/QR sizing below was trimmed to make room for that.
-  patientSubRow: { flexDirection: "row", alignItems: "flex-start" },
-  patientSubField: { flexShrink: 0, marginRight: 14 },
-  patientSubFieldWrap: { flexShrink: 0 },
-  fieldInline: { fontSize: 8.5, color: "#000000" },
+  patientInfoCol: { flex: 1, paddingRight: 8, justifyContent: "center" },
+  patientDivider: { width: 1, backgroundColor: "#d1d5db", marginHorizontal: 8 },
+  // Aligned label/value rows — fixed-width label column so every value
+  // (Invoice ID, Time, Name, Age/Gender, Contact, Doctor's Name) starts at
+  // the same x position.
+  patientFieldRow: { flexDirection: "row", marginBottom: 3 },
+  patientFieldRowLast: { flexDirection: "row" },
+  patientFieldLabel: { width: 82, paddingRight: 4, fontFamily: "Helvetica", fontSize: 8.5, color: "#000000" },
+  patientFieldValue: { flex: 1, fontFamily: "Helvetica-Bold", fontSize: 8.5, color: "#000000" },
+  patientFieldValueName: { flex: 1, fontFamily: "Helvetica-Bold", fontSize: 11, color: "#000000" },
+  // Inline label used for the "Time" sub-label packed inside the Invoice ID
+  // row's value cell (not its own regular/bold weight).
   fieldLabelLine: { fontFamily: "Helvetica", fontSize: 8.5, color: "#000000" },
-  fieldValueLine: { fontFamily: "Helvetica-Bold", fontSize: 8.5, color: "#000000" },
-  // QR — sized to sit level with the patient-info text block rather than
-  // towering over it now that the box has a fixed, compact height. Trimmed
-  // down a bit further (46 -> 40, marginLeft 16 -> 10) to free up horizontal
-  // room for the now-unwrapped Time field beside it.
-  qrContainer: { alignItems: "center", justifyContent: "center", marginLeft: 10 },
-  qrImage: { width: 40, height: 40 },
+  // QR — sits inside the patient box, right of the divider. Bumped up from
+  // 42 -> 60 so it reads clearly when scanned straight off a phone screen.
+  qrContainer: { alignItems: "center", justifyContent: "center" },
+  qrImage: { width: 60, height: 60 },
   qrLabel: { fontSize: 6, color: "#000000", textAlign: "center", marginTop: 2 },
   dlBtnWrapper: { marginTop: 4, position: "relative" },
   dlBtn: {
@@ -404,22 +390,43 @@ const pdf$ = StyleSheet.create({
   dlBtnIcon: { width: 6, height: 6, marginRight: 2.5 },
   dlBtnOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, opacity: 0 },
   dlBtnText: { color: "#ffffff", fontFamily: "Helvetica-Bold", fontSize: 6 },
-  // table
-  tableHeader: { flexDirection: "row", backgroundColor: "#f3f4f6", padding: "5 8", borderBottom: "1 solid #e5e7eb" },
-  // Row vertical padding trimmed further (2.5 -> 1) so more test/product
-  // lines fit on a single A5 page before the pricing summary spills onto a
-  // second page. Header row above is untouched so it stays readable.
-  tableRow: { flexDirection: "row", padding: "1 8", borderBottom: "1 solid #f3f4f6" },
-  tableRowEven: { flexDirection: "row", padding: "1 8", borderBottom: "1 solid #f3f4f6", backgroundColor: "#fafafa" },
-  colNum: { width: "8%", fontSize: 8, color: "#000000" },
-  colName: { flex: 1, fontSize: 8, color: "#000000" },
-  colPrice: { width: "25%", fontSize: 8, textAlign: "right", fontFamily: "Helvetica-Bold", color: "#000000" },
+  // table — outer border wraps the whole grid; column dividers (borderRight
+  // on colNum/colName) plus row borders (borderBottom on each row) give it
+  // a proper ruled-table look. Padding/font trimmed down further so 15-20
+  // rows comfortably fit on a single A5 page.
+  tableWrapper: { border: "1 solid #000000" },
+  tableHeader: { flexDirection: "row", backgroundColor: "#f3f4f6", padding: "3 6", borderBottom: "1 solid #000000" },
+  tableRow: { flexDirection: "row", padding: "0.5 6", borderBottom: "0.5 solid #000000" },
+  tableRowEven: {
+    flexDirection: "row",
+    padding: "0.5 6",
+    borderBottom: "0.5 solid #000000",
+    backgroundColor: "#fafafa",
+  },
+  colNum: { width: "8%", fontSize: 7.5, color: "#000000", borderRight: "0.5 solid #000000", paddingRight: 3 },
+  colName: {
+    flex: 1,
+    fontSize: 7.5,
+    fontFamily: "Helvetica-Bold",
+    color: "#000000",
+    borderRight: "0.5 solid #000000",
+    paddingLeft: 3,
+    paddingRight: 3,
+  },
+  colPrice: {
+    width: "25%",
+    fontSize: 7.5,
+    textAlign: "right",
+    fontFamily: "Helvetica-Bold",
+    color: "#000000",
+    paddingLeft: 3,
+  },
   colHeader: {
     fontFamily: "Helvetica-Bold",
-    fontSize: 7.5,
+    fontSize: 7,
     color: "#000000",
     textTransform: "uppercase",
-    letterSpacing: 0.4,
+    letterSpacing: 0.3,
   },
   // pricing
   pricingBox: { marginTop: 10, alignItems: "flex-end" },
@@ -429,6 +436,9 @@ const pdf$ = StyleSheet.create({
   // These were five identically-defined styles (fee/neg/paid/due all had the
   // exact same fontSize/weight/color) — collapsed into one shared style.
   pricingValue: { fontSize: 8, fontFamily: "Helvetica-Bold", color: "#000000" },
+  // Due Amount — bolder/larger than the other pricing rows so it stands out.
+  dueLabel: { fontSize: 9, fontFamily: "Helvetica-Bold", color: "#000000" },
+  dueValue: { fontSize: 9.5, fontFamily: "Helvetica-Bold", color: "#000000" },
   divider: { borderTop: "1.5 solid #d1d5db", marginVertical: 5 },
   dashedDivider: { borderTop: "1 dashed #d1d5db", marginVertical: 5 },
   totalRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 2 },
@@ -497,31 +507,42 @@ const InvoicePDF = ({ invoice, qrCodeUrl, labInfo, logoPngUrl, hideDownloadButto
           </View>
         )}
 
-        {/* Patient — boxed so it reads as its own distinct block */}
+        {/* Patient — bordered box: fields left, divider, QR right */}
         <View style={pdf$.patientBox}>
-          <View style={pdf$.patientRow}>
-            <View style={pdf$.patientGrid}>
-              <View style={[pdf$.patientHeaderRow, flags.showDoctorName && { marginBottom: PATIENT_ROW_GAP }]}>
-                <View style={pdf$.patientIdCol}>
-                  <PDFField label="Invoice ID" value={invoiceId || "N/A"} style={pdf$.patientIdField} />
-                  <PDFField label="Age" value={formatAgeCompact(patient.age)} />
-                </View>
-                <View style={pdf$.patientMainCol}>
-                  <View style={pdf$.patientTopRow}>
-                    <PDFField label="Name" value={patient.name} style={pdf$.patientTopName} />
-                    <PDFField label="Gender" value={formatGenderShort(patient.gender)} style={pdf$.patientTopGender} />
-                  </View>
-                  <View style={pdf$.patientSubRow}>
-                    <PDFField label="Contact" value={patient.contactNumber} style={pdf$.patientSubField} />
-                    <PDFField label="Time" value={formatDateTimeMerged(createdAt)} style={pdf$.patientSubFieldWrap} />
-                  </View>
-                </View>
-              </View>
-              {flags.showDoctorName && (
-                <PDFField label="Doctor's Name" value={flags.doctorNameLabel} style={pdf$.patientFieldFull} />
-              )}
+          <View style={pdf$.patientInfoCol}>
+            <View style={pdf$.patientFieldRow}>
+              <Text style={pdf$.patientFieldLabel}>Invoice ID:</Text>
+              <Text style={pdf$.patientFieldValue}>
+                {invoiceId || "N/A"}
+                <Text style={pdf$.fieldLabelLine}> Time: </Text>
+                {formatDateTimeMerged(createdAt)}
+              </Text>
             </View>
-            {qrCodeUrl && (
+            <View style={pdf$.patientFieldRow}>
+              <Text style={pdf$.patientFieldLabel}>Name:</Text>
+              <Text style={pdf$.patientFieldValueName}>{patient.name}</Text>
+            </View>
+            <View style={pdf$.patientFieldRow}>
+              <Text style={pdf$.patientFieldLabel}>Age / Gender:</Text>
+              <Text style={pdf$.patientFieldValue}>
+                {formatAgeCompact(patient.age)} / {formatGenderShort(patient.gender)}
+              </Text>
+            </View>
+            <View style={flags.showDoctorName ? pdf$.patientFieldRow : pdf$.patientFieldRowLast}>
+              <Text style={pdf$.patientFieldLabel}>Contact:</Text>
+              <Text style={pdf$.patientFieldValue}>{patient.contactNumber}</Text>
+            </View>
+            {flags.showDoctorName && (
+              <View style={pdf$.patientFieldRowLast}>
+                <Text style={pdf$.patientFieldLabel}>Doctor's Name:</Text>
+                <Text style={pdf$.patientFieldValue}>{flags.doctorNameLabel}</Text>
+              </View>
+            )}
+          </View>
+
+          {qrCodeUrl && (
+            <>
+              <View style={pdf$.patientDivider} />
               <View style={pdf$.qrContainer}>
                 <Image style={pdf$.qrImage} src={qrCodeUrl} />
                 <Text style={pdf$.qrLabel}>Scan to download Reports</Text>
@@ -542,40 +563,42 @@ const InvoicePDF = ({ invoice, qrCodeUrl, labInfo, logoPngUrl, hideDownloadButto
                   </View>
                 )}
               </View>
-            )}
-          </View>
+            </>
+          )}
         </View>
 
         {/* Tests & Products & Pricing */}
         <View style={pdf$.sectionLast}>
-          {/* Smart header */}
-          <View style={pdf$.tableHeader}>
-            <Text style={[pdf$.colNum, pdf$.colHeader]}>#</Text>
-            <Text style={[pdf$.colName, pdf$.colHeader]}>
-              {tests.length > 0 && products.length > 0 ? "Test / Product" : tests.length > 0 ? "Test" : "Product"}
-            </Text>
-            <Text style={[pdf$.colPrice, pdf$.colHeader]}>Price</Text>
-          </View>
-
-          {/* Flat unified list — tests first, then products, sequentially numbered */}
-          {[
-            ...tests.map((t, i) => ({ n: i + 1, name: t.name, price: fmt(t.price) })),
-            ...products.map((p, i) => {
-              const qty = p.quantity ?? 1;
-              const unitPrice = p.price ?? 0;
-              return {
-                n: tests.length + i + 1,
-                name: qty > 1 ? `${p.name} (${qty} × ${fmt(unitPrice)})` : p.name,
-                price: fmt(unitPrice * qty),
-              };
-            }),
-          ].map((row, i) => (
-            <View key={i} style={i % 2 === 0 ? pdf$.tableRow : pdf$.tableRowEven}>
-              <Text style={pdf$.colNum}>{row.n}</Text>
-              <Text style={pdf$.colName}>{row.name}</Text>
-              <Text style={pdf$.colPrice}>{row.price}</Text>
+          <View style={pdf$.tableWrapper}>
+            {/* Smart header */}
+            <View style={pdf$.tableHeader}>
+              <Text style={[pdf$.colNum, pdf$.colHeader]}>#</Text>
+              <Text style={[pdf$.colName, pdf$.colHeader]}>
+                {tests.length > 0 && products.length > 0 ? "Test / Product" : tests.length > 0 ? "Test" : "Product"}
+              </Text>
+              <Text style={[pdf$.colPrice, pdf$.colHeader]}>Price</Text>
             </View>
-          ))}
+
+            {/* Flat unified list — tests first, then products, sequentially numbered */}
+            {[
+              ...tests.map((t, i) => ({ n: i + 1, name: t.name, price: fmt(t.price) })),
+              ...products.map((p, i) => {
+                const qty = p.quantity ?? 1;
+                const unitPrice = p.price ?? 0;
+                return {
+                  n: tests.length + i + 1,
+                  name: qty > 1 ? `${p.name} (${qty} × ${fmt(unitPrice)})` : p.name,
+                  price: fmt(unitPrice * qty),
+                };
+              }),
+            ].map((row, i) => (
+              <View key={i} style={i % 2 === 0 ? pdf$.tableRow : pdf$.tableRowEven}>
+                <Text style={pdf$.colNum}>{row.n}</Text>
+                <Text style={pdf$.colName}>{row.name}</Text>
+                <Text style={pdf$.colPrice}>{row.price}</Text>
+              </View>
+            ))}
+          </View>
 
           {/* Pricing summary — Online Invoice Fee, then Subtotal, then any
               deductions (Media Discount / Lab Adjustment), then Total. Rows
@@ -592,7 +615,14 @@ const InvoicePDF = ({ invoice, qrCodeUrl, labInfo, logoPngUrl, hideDownloadButto
               </View>
               <View style={pdf$.dashedDivider} />
               <PDFPricingRow label="Paid Amount" value={fmt(amount.paid)} />
-              {!flags.isFullyPaid && <PDFPricingRow label="Due Amount" value={fmt(flags.due)} />}
+              {!flags.isFullyPaid && (
+                <PDFPricingRow
+                  label="Due Amount"
+                  value={fmt(flags.due)}
+                  labelStyle={pdf$.dueLabel}
+                  valueStyle={pdf$.dueValue}
+                />
+              )}
               {flags.isFullyPaid && (
                 <View style={pdf$.paidBadge}>
                   <Text style={pdf$.paidBadgeText}>✓ FULLY PAID</Text>
@@ -614,18 +644,9 @@ const InvoicePDF = ({ invoice, qrCodeUrl, labInfo, logoPngUrl, hideDownloadButto
 };
 
 // Small stateless helpers used only inside the PDF
-const PDFField = ({ label, value, style }) => (
-  <View style={style}>
-    <Text style={pdf$.fieldInline}>
-      <Text style={pdf$.fieldLabelLine}>{label}: </Text>
-      <Text style={pdf$.fieldValueLine}>{value}</Text>
-    </Text>
-  </View>
-);
-
-const PDFPricingRow = ({ label, value, valueStyle = pdf$.pricingValue }) => (
+const PDFPricingRow = ({ label, value, labelStyle = pdf$.pricingLabel, valueStyle = pdf$.pricingValue }) => (
   <View style={pdf$.pricingRow}>
-    <Text style={pdf$.pricingLabel}>{label}</Text>
+    <Text style={labelStyle}>{label}</Text>
     <Text style={valueStyle}>{value}</Text>
   </View>
 );
@@ -693,65 +714,59 @@ const InvoiceCard = ({ invoice, qrCodeUrl, labInfo, downloading = false, sharing
         </div>
       </div>
 
-      {/* Patient — boxed so it reads as its own distinct block. Invoice ID
-          stacks above Age in the left column; Name+Gender stacks above
-          Contact+Time in the column beside it, so Age lines up directly
-          under Invoice ID. Outer py and inner p trimmed (py-4/p-2.5 ->
-          py-2/p-1.5) to minimize the gap above and below this section. */}
+      {/* Patient — bordered box: fields left, divider, QR right */}
       <div className="px-6 py-2">
-        <div className="flex items-start gap-3 p-1.5">
-          <div className="flex-1">
-            {/* All three row-gaps in this box — ID→Age, Name/Gender→Contact/Time,
-                and header→Doctor's Name — share the same mb-1.5, so this one
-                wrapper's bottom margin (only added when Doctor's Name follows)
-                keeps every gap equal instead of drifting independently. */}
-            <div className={`flex items-start ${flags.showDoctorName ? "mb-1.5" : ""}`}>
-              <div className="shrink-0 mr-4">
-                <div className="mb-1.5">
-                  <PatientField label="Invoice ID" value={invoiceId || "N/A"} />
-                </div>
-                <PatientField
-                  label="Age"
-                  value={<span className="whitespace-nowrap">{formatAgeCompact(patient.age)}</span>}
-                />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-start gap-4 mb-1.5">
-                  <div className="flex-1 min-w-0">
-                    <PatientField label="Name" value={patient.name} />
-                  </div>
-                  <PatientField label="Gender" value={formatGenderShort(patient.gender)} />
-                </div>
-                <div className="flex items-start gap-4">
-                  <PatientField
-                    label="Contact"
-                    value={<span className="whitespace-nowrap">{patient.contactNumber}</span>}
-                  />
-                  <PatientField
-                    label="Time"
-                    value={<span className="whitespace-nowrap">{formatDateTimeMerged(createdAt)}</span>}
-                  />
-                </div>
-              </div>
-            </div>
-            {flags.showDoctorName && <PatientField label="Doctor's Name" value={flags.doctorNameLabel} />}
+        <div className="flex items-stretch border-2 border-black rounded-none p-3 gap-3">
+          <div className="flex-1 min-w-0 flex flex-col justify-center">
+            <p className="text-sm text-black leading-snug flex">
+              <span className="w-28 shrink-0 pr-2">Invoice ID:</span>
+              <span className="font-medium">
+                {invoiceId || "N/A"}
+                <span className="font-normal ml-8">Time: </span>
+                <span className="font-medium">{formatDateTimeMerged(createdAt)}</span>
+              </span>
+            </p>
+            <p className="text-base text-black leading-snug flex mb-1">
+              <span className="w-28 shrink-0 pr-2">Name:</span>
+              <span className="font-bold truncate">{patient.name}</span>
+            </p>
+            <p className="text-sm text-black leading-snug flex">
+              <span className="w-28 shrink-0 pr-2">Age / Gender:</span>
+              <span className="font-medium">
+                {formatAgeCompact(patient.age)} / {formatGenderShort(patient.gender)}
+              </span>
+            </p>
+            <p className="text-sm text-black leading-snug flex">
+              <span className="w-28 shrink-0 pr-2">Contact:</span>
+              <span className="font-medium">{patient.contactNumber}</span>
+            </p>
+            {flags.showDoctorName && (
+              <p className="text-sm text-black leading-snug flex">
+                <span className="w-28 shrink-0 pr-2">Doctor's Name:</span>
+                <span className="font-medium">{flags.doctorNameLabel}</span>
+              </p>
+            )}
           </div>
+
           {qrCodeUrl && (
-            <div className="shrink-0 flex flex-col items-center justify-center gap-0.5">
-              <img src={qrCodeUrl} alt="QR Code" className="w-14 h-14" />
-              <p className="text-[9px] text-black text-center leading-tight">Scan to download Reports</p>
-              {showDownloadBtn && (
-                <a
-                  href={reportLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-1 flex items-center gap-1 px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white text-[9px] font-semibold rounded transition-colors"
-                >
-                  <Download className="w-2 h-2" />
-                  Click to Download Reports
-                </a>
-              )}
-            </div>
+            <>
+              <div className="w-px bg-gray-300" />
+              <div className="shrink-0 flex flex-col items-center justify-center gap-0.5">
+                <img src={qrCodeUrl} alt="QR Code" className="w-24 h-24" />
+                <p className="text-[9px] text-black text-center leading-tight">Scan to download Reports</p>
+                {showDownloadBtn && (
+                  <a
+                    href={reportLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-1 flex items-center gap-1 px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white text-[9px] font-semibold rounded transition-colors"
+                  >
+                    <Download className="w-2 h-2" />
+                    Click to Download Reports
+                  </a>
+                )}
+              </div>
+            </>
           )}
         </div>
       </div>
@@ -759,18 +774,22 @@ const InvoiceCard = ({ invoice, qrCodeUrl, labInfo, downloading = false, sharing
       {/* Tests & Products & Pricing */}
       <div className="px-6 py-2">
         {/* Unified items table */}
-        <div className="border border-gray-200 rounded-lg overflow-hidden">
-          <table className="w-full">
+        <div className="border-2 border-black rounded-none overflow-hidden">
+          <table className="w-full border-collapse">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-3 py-2 text-left text-xs font-semibold text-black uppercase w-8">#</th>
-                <th className="px-3 py-2 text-left text-xs font-semibold text-black uppercase">
+                <th className="px-2 py-1 text-left text-xs font-semibold text-black uppercase w-8 border border-black">
+                  #
+                </th>
+                <th className="px-2 py-1 text-left text-xs font-semibold text-black uppercase border border-black">
                   {tests.length > 0 && products.length > 0 ? "Test / Product" : tests.length > 0 ? "Test" : "Product"}
                 </th>
-                <th className="px-3 py-2 text-right text-xs font-semibold text-black uppercase">Price</th>
+                <th className="px-2 py-1 text-right text-xs font-semibold text-black uppercase border border-black">
+                  Price
+                </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody>
               {[
                 ...tests.map((t, i) => ({ n: i + 1, key: t._id || `t${i}`, name: t.name, price: fmt(t.price) })),
                 ...products.map((p, i) => {
@@ -795,9 +814,11 @@ const InvoiceCard = ({ invoice, qrCodeUrl, labInfo, downloading = false, sharing
                 }),
               ].map((row, i) => (
                 <tr key={row.key} className={i % 2 === 1 ? "bg-gray-50/50" : ""}>
-                  <td className="px-3 py-1 text-xs text-black">{row.n}</td>
-                  <td className="px-3 py-1 text-sm text-black">{row.name}</td>
-                  <td className="px-3 py-1 text-sm text-black text-right font-medium">{row.price}</td>
+                  <td className="px-2 py-0.5 text-xs text-black border border-black">{row.n}</td>
+                  <td className="px-2 py-0.5 text-xs text-black font-bold border border-black">{row.name}</td>
+                  <td className="px-2 py-0.5 text-xs text-black text-right font-bold border border-black">
+                    {row.price}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -824,7 +845,12 @@ const InvoiceCard = ({ invoice, qrCodeUrl, labInfo, downloading = false, sharing
                 <span className="font-semibold text-black">{fmt(amount.paid)}</span>
               </div>
               {!flags.isFullyPaid && (
-                <PricingRow label="Due Amount" value={fmt(flags.due)} valueClass="font-semibold text-black" />
+                <PricingRow
+                  label="Due Amount"
+                  value={fmt(flags.due)}
+                  labelClass="font-bold text-black text-base"
+                  valueClass="font-bold text-black text-base"
+                />
               )}
               {flags.isFullyPaid && (
                 <div className="flex items-center justify-end gap-1.5 py-1 px-2 bg-green-50 rounded-lg">
@@ -840,16 +866,10 @@ const InvoiceCard = ({ invoice, qrCodeUrl, labInfo, downloading = false, sharing
   );
 };
 
-// Small stateless helpers used only inside InvoiceCard
-const PatientField = ({ label, value }) => (
-  <p className="text-sm text-black leading-snug">
-    <span className="text-black">{label}:</span> <span className="font-medium text-black">{value}</span>
-  </p>
-);
-
-const PricingRow = ({ label, value, valueClass = "font-medium text-black" }) => (
+// Small stateless helper used only inside InvoiceCard
+const PricingRow = ({ label, value, labelClass = "text-black", valueClass = "font-medium text-black" }) => (
   <div className="flex justify-between text-sm">
-    <span className="text-black">{label}</span>
+    <span className={labelClass}>{label}</span>
     <span className={valueClass}>{value}</span>
   </div>
 );
@@ -1022,19 +1042,31 @@ const PrintInvoice = () => {
   // Shared by both Print and Print (Pad) — only the buildPDF options differ.
   const printBlob = async (buildOptions) => {
     const url = URL.createObjectURL(await buildPDF(buildOptions));
+    // Give the iframe real (if tiny) dimensions rather than 1x1 — some
+    // Chrome versions fail to fully initialize the PDF viewer plugin in an
+    // effectively-zero-size frame, which is part of why the print dialog
+    // can flash and immediately close.
     const iframe = Object.assign(document.createElement("iframe"), {
       src: url,
-      style: "position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:0;",
+      style: "position:fixed;top:-9999px;left:-9999px;width:100px;height:100px;border:0;",
     });
     document.body.appendChild(iframe);
     iframe.onload = () => {
+      // Chrome opens the print dialog against whichever document currently
+      // has focus. If the iframe's PDF viewer isn't focused at the moment
+      // print() is called, Chrome shows the dialog for an instant and then
+      // auto-dismisses it — the "blink and gone" behavior. Explicitly
+      // focusing the iframe's window (and the iframe element itself) right
+      // before printing fixes this reliably.
       setTimeout(() => {
+        iframe.focus();
+        iframe.contentWindow?.focus();
         iframe.contentWindow?.print();
         setTimeout(() => {
           document.body.removeChild(iframe);
           URL.revokeObjectURL(url);
         }, 60_000);
-      }, 500);
+      }, 800);
     };
   };
 
