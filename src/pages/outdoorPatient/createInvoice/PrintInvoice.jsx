@@ -18,10 +18,10 @@ import Popup from "../../../components/popup";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+// Plain grouped number, no currency symbol/code prefix (e.g. "1,200" not
+// "BDT 1,200" / "৳1,200") — used everywhere a price/amount is displayed.
 const fmt = (n) =>
-  new Intl.NumberFormat("en-BD", { style: "currency", currency: "BDT", minimumFractionDigits: 0 }).format(
-    isNaN(Number(n)) ? 0 : Number(n),
-  );
+  new Intl.NumberFormat("en-BD", { minimumFractionDigits: 0 }).format(isNaN(Number(n)) ? 0 : Number(n));
 
 const formatDateTime = (ts) => {
   const d = new Date(ts);
@@ -406,7 +406,7 @@ const pdf$ = StyleSheet.create({
   colNum: { width: "8%", fontSize: 7.5, color: "#000000", borderRight: "0.5 solid #000000", paddingRight: 3 },
   colName: {
     flex: 1,
-    fontSize: 7.5,
+    fontSize: 8.5,
     fontFamily: "Helvetica-Bold",
     color: "#000000",
     borderRight: "0.5 solid #000000",
@@ -434,16 +434,20 @@ const pdf$ = StyleSheet.create({
   pricingRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 4 },
   pricingLabel: { fontSize: 8, color: "#000000" },
   // These were five identically-defined styles (fee/neg/paid/due all had the
-  // exact same fontSize/weight/color) — collapsed into one shared style.
+  // exact same fontSize/weight/color) — now split into three tiers so Paid
+  // and Due can stand out for print: regular rows stay small, Paid steps up,
+  // Due is the most prominent figure on the page.
   pricingValue: { fontSize: 8, fontFamily: "Helvetica-Bold", color: "#000000" },
-  // Due Amount — bolder/larger than the other pricing rows so it stands out.
-  dueLabel: { fontSize: 9, fontFamily: "Helvetica-Bold", color: "#000000" },
-  dueValue: { fontSize: 9.5, fontFamily: "Helvetica-Bold", color: "#000000" },
-  divider: { borderTop: "1.5 solid #d1d5db", marginVertical: 5 },
+  // Paid Amount — a step up from the regular pricing rows.
+  paidLabel: { fontSize: 10, fontFamily: "Helvetica-Bold", color: "#000000" },
+  paidValue: { fontSize: 10.5, fontFamily: "Helvetica-Bold", color: "#000000" },
+  // Due Amount — bolder/larger than everything else so it stands out.
+  dueLabel: { fontSize: 12, fontFamily: "Helvetica-Bold", color: "#000000" },
+  dueValue: { fontSize: 14, fontFamily: "Helvetica-Bold", color: "#000000" },
   dashedDivider: { borderTop: "1 dashed #d1d5db", marginVertical: 5 },
   totalRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 2 },
-  totalLabel: { fontSize: 10, fontFamily: "Helvetica-Bold", color: "#000000" },
-  totalValue: { fontSize: 12, fontFamily: "Helvetica-Bold", color: "#000000" },
+  totalLabel: { fontSize: 13, fontFamily: "Helvetica-Bold", color: "#000000" },
+  totalValue: { fontSize: 16, fontFamily: "Helvetica-Bold", color: "#000000" },
   paidBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -453,7 +457,7 @@ const pdf$ = StyleSheet.create({
     backgroundColor: "#dcfce7",
     borderRadius: 4,
   },
-  paidBadgeText: { fontSize: 8, fontFamily: "Helvetica-Bold", color: "#000000" },
+  paidBadgeText: { fontSize: 9, fontFamily: "Helvetica-Bold", color: "#000000" },
 });
 
 // ─── PDF Document ─────────────────────────────────────────────────────────────
@@ -601,20 +605,26 @@ const InvoicePDF = ({ invoice, qrCodeUrl, labInfo, logoPngUrl, hideDownloadButto
           </View>
 
           {/* Pricing summary — Online Invoice Fee, then Subtotal, then any
-              deductions (Media Discount / Lab Adjustment), then Total. Rows
-              come from getPricingRows() instead of four repeated blocks. */}
+              deductions (Media Discount / Lab Adjustment), then Total, then
+              Paid/Due. Rows come from getPricingRows() instead of four
+              repeated blocks. No rule directly above Total Amount — only the
+              dashed rule below it, separating it from Paid/Due. */}
           <View style={pdf$.pricingBox}>
             <View style={pdf$.pricingInner}>
               {getPricingRows(invoice).map((row) => (
                 <PDFPricingRow key={row.key} label={row.label} value={row.value} />
               ))}
-              <View style={pdf$.divider} />
               <View style={pdf$.totalRow}>
                 <Text style={pdf$.totalLabel}>Total Amount</Text>
                 <Text style={pdf$.totalValue}>{fmt(amount.final)}</Text>
               </View>
               <View style={pdf$.dashedDivider} />
-              <PDFPricingRow label="Paid Amount" value={fmt(amount.paid)} />
+              <PDFPricingRow
+                label="Paid Amount"
+                value={fmt(amount.paid)}
+                labelStyle={pdf$.paidLabel}
+                valueStyle={pdf$.paidValue}
+              />
               {!flags.isFullyPaid && (
                 <PDFPricingRow
                   label="Due Amount"
@@ -815,7 +825,7 @@ const InvoiceCard = ({ invoice, qrCodeUrl, labInfo, downloading = false, sharing
               ].map((row, i) => (
                 <tr key={row.key} className={i % 2 === 1 ? "bg-gray-50/50" : ""}>
                   <td className="px-2 py-0.5 text-xs text-black border border-black">{row.n}</td>
-                  <td className="px-2 py-0.5 text-xs text-black font-bold border border-black">{row.name}</td>
+                  <td className="px-2 py-0.5 text-sm text-black font-bold border border-black">{row.name}</td>
                   <td className="px-2 py-0.5 text-xs text-black text-right font-bold border border-black">
                     {row.price}
                   </td>
@@ -826,36 +836,38 @@ const InvoiceCard = ({ invoice, qrCodeUrl, labInfo, downloading = false, sharing
         </div>
 
         {/* Pricing summary — Online Invoice Fee, then Subtotal, then any
-            deductions (Media Discount / Lab Adjustment), then Total. Rows
-            come from getPricingRows() instead of four repeated blocks. */}
+            deductions (Media Discount / Lab Adjustment), then Total, then
+            Paid/Due. Rows come from getPricingRows() instead of four
+            repeated blocks. No rule above Total Amount — only the dashed
+            rule below it separates it from Paid/Due. */}
         <div className="mt-3 flex justify-end">
           <div className="w-64 space-y-1.5">
             {getPricingRows(invoice).map((row) => (
               <PricingRow key={row.key} label={row.label} value={row.value} />
             ))}
-            <div className="flex justify-between pt-2 border-t-2 border-gray-200">
-              <span className="text-base font-semibold text-black">Total Amount</span>
-              <span className="text-lg font-bold text-black">{fmt(amount.final)}</span>
+            <div className="flex justify-between pt-2">
+              <span className="text-xl font-bold text-black">Total Amount</span>
+              <span className="text-2xl font-bold text-black">{fmt(amount.final)}</span>
             </div>
             <div className="pt-2 border-t border-dashed border-gray-300 space-y-1.5">
-              <div className="flex justify-between text-sm">
-                <span className="text-black flex items-center gap-1.5">
-                  <Wallet className="w-3.5 h-3.5 text-green-600" /> Paid Amount
+              <div className="flex justify-between text-base">
+                <span className="text-black font-semibold flex items-center gap-1.5">
+                  <Wallet className="w-4 h-4 text-green-600" /> Paid Amount
                 </span>
-                <span className="font-semibold text-black">{fmt(amount.paid)}</span>
+                <span className="font-bold text-black">{fmt(amount.paid)}</span>
               </div>
               {!flags.isFullyPaid && (
                 <PricingRow
                   label="Due Amount"
                   value={fmt(flags.due)}
-                  labelClass="font-bold text-black text-base"
-                  valueClass="font-bold text-black text-base"
+                  labelClass="font-bold text-black text-xl"
+                  valueClass="font-bold text-black text-xl"
                 />
               )}
               {flags.isFullyPaid && (
                 <div className="flex items-center justify-end gap-1.5 py-1 px-2 bg-green-50 rounded-lg">
-                  <CheckCircle className="w-3.5 h-3.5 text-green-600" />
-                  <span className="text-black text-xs font-semibold tracking-wide uppercase">Fully Paid</span>
+                  <CheckCircle className="w-4 h-4 text-green-600" />
+                  <span className="text-black text-sm font-semibold tracking-wide uppercase">Fully Paid</span>
                 </div>
               )}
             </div>
