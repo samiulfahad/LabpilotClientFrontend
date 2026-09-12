@@ -153,9 +153,9 @@ const ROW_STYLE = {
 function ResultRow({ name, field, hasUnits, hasRefInfo }) {
   const value = String(field.value ?? "");
   const unit = field.unit || "";
-  // A tier-tagged field has no stored numeric range text (only the matched
-  // tier's label, in referenceTag) — the Ref. Range column stays dashed for
-  // those; the tag's label carries the classification in Status instead.
+  // referenceRange holds the matched tier's own bounds (e.g. "70–100",
+  // "> 10"); referenceTag holds its label (e.g. "High") — Ref. Range and
+  // Status show each separately.
   const ref = field.referenceRange || "";
   const info = hasRefInfo ? getStatusInfo(field) : null;
   const style = info ? (ROW_STYLE[info.status] ?? {}) : {};
@@ -168,7 +168,7 @@ function ResultRow({ name, field, hasUnits, hasRefInfo }) {
         {value}
       </td>
       {hasUnits && (
-        <td className="px-3 py-2.5 text-[10px] font-bold text-black uppercase border-b border-slate-100">
+        <td className="px-3 py-2.5 text-[10px] font-bold text-black border-b border-slate-100">
           {unit || <span className="text-black">—</span>}
         </td>
       )}
@@ -200,7 +200,7 @@ function PlainValueRow({ name, field, hasUnits, hasRefInfo }) {
         {val || <span className="text-black">—</span>}
       </td>
       {hasUnits && (
-        <td className="px-3 py-2.5 text-[10px] font-bold text-black uppercase border-b border-slate-100">
+        <td className="px-3 py-2.5 text-[10px] font-bold text-black border-b border-slate-100">
           <span className="text-black">—</span>
         </td>
       )}
@@ -454,10 +454,9 @@ function buildPrintHTML({
     const combinedRows = entries
       .map(([name, field]) => {
         if (isResultField(field)) {
-          // Tier-tagged fields have no stored numeric range text (only the
-          // matched tier's label, in referenceTag) — Ref. Range stays
-          // dashed for those; the tag's label carries the classification
-          // in Status instead.
+          // referenceRange holds the matched tier's own bounds (e.g.
+          // "70–100", "> 10"); referenceTag holds its label (e.g. "High")
+          // — Ref. Range and Status show each separately.
           const ref = field.referenceRange || "";
           const info = hasRefInfo ? getStatusInfo(field) : null;
           const st = info ? info.status : null;
@@ -470,7 +469,7 @@ function buildPrintHTML({
           return `<tr style="background:${rowBg(st)};">
         <td style="padding:6px 10px;font-size:11.5px;font-weight:600;color:#000000;border-bottom:1px solid #f1f5f9;">${name}</td>
         <td style="padding:6px 10px;font-size:11.5px;font-weight:700;color:${valColor(st)};border-bottom:1px solid #f1f5f9;font-family:monospace;">${field.value}</td>
-        ${hasUnits ? `<td style="padding:6px 10px;font-size:9px;font-weight:700;color:#000000;text-transform:uppercase;border-bottom:1px solid #f1f5f9;">${field.unit || "—"}</td>` : ""}
+        ${hasUnits ? `<td style="padding:6px 10px;font-size:9px;font-weight:700;color:#000000;border-bottom:1px solid #f1f5f9;">${field.unit || "—"}</td>` : ""}
         ${rangeCells}
       </tr>`;
         }

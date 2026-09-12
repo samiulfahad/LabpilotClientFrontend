@@ -126,7 +126,6 @@ const s = StyleSheet.create({
     fontFamily: "Helvetica-Bold",
     paddingHorizontal: 8,
     color: C.slate400,
-    textTransform: "uppercase",
   },
   pill: { paddingHorizontal: 5, paddingVertical: 1.5 },
 
@@ -304,10 +303,9 @@ function PDFSection({ sectionName, sectionData, showHeader }) {
           {entries.map(([name, field]) => {
             if (isResultField(field)) {
               const value = String(field.value ?? "");
-              // A tier-tagged field has no stored numeric range text (only
-              // the matched tier's label, in referenceTag) — the Ref. Range
-              // column stays dashed for those; the tag's label carries the
-              // classification in the Status column instead.
+              // referenceRange holds the matched tier's own bounds (e.g.
+              // "70–100", "> 10"); referenceTag holds its label (e.g.
+              // "High") — Ref. Range and Status show each separately.
               const ref = field.referenceRange || "";
               const info = hasRefInfo ? getStatusInfo(field) : null;
               const rc = info ? (ROW_COLORS[info.status] ?? {}) : {};

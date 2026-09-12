@@ -103,6 +103,31 @@ function tierMatches(t, v) {
   }
 }
 
+// Human-readable rendering of a tier's own bounds, e.g. "70–100", "> 10",
+// "≤ 5" — this is what belongs in a report's Ref. Range column. Distinct
+// from the tier's label (e.g. "High"), which belongs in Status instead.
+function formatTierRange(t) {
+  const comparator = t.comparator || "between";
+  const hasMin = t.min !== "" && t.min !== null && t.min !== undefined;
+  const hasMax = t.max !== "" && t.max !== null && t.max !== undefined;
+  switch (comparator) {
+    case "gt":
+      return hasMin ? `> ${t.min}` : "—";
+    case "gte":
+      return hasMin ? `≥ ${t.min}` : "—";
+    case "lt":
+      return hasMax ? `< ${t.max}` : "—";
+    case "lte":
+      return hasMax ? `≤ ${t.max}` : "—";
+    case "between":
+    default:
+      if (hasMin && hasMax) return `${t.min}–${t.max}`;
+      if (hasMin) return `≥ ${t.min}`;
+      if (hasMax) return `≤ ${t.max}`;
+      return "—";
+  }
+}
+
 export function evaluateStatus(value, rangeInfo) {
   if (!rangeInfo || value === "" || value === null || value === undefined) return null;
   const v = parseFloat(value);
@@ -116,7 +141,7 @@ export function evaluateStatus(value, rangeInfo) {
   if (/low/.test(label)) status = "low";
   else if (/high/.test(label)) status = "high";
   else if (/normal|unremarkable|negative/.test(label)) status = "normal";
-  return { status, label: tier.label };
+  return { status, label: tier.label, range: formatTierRange(tier) };
 }
 
 // Convenience for callers that already have a plain { min, max } (not a
@@ -146,6 +171,20 @@ export function hydrateValuesFromReport(schema, existingReport) {
   return values;
 }
 
+// A text/textarea field's reference note — Text and Textarea are both a
+// plain string; Key-Value Pair is a list of { key, value } rows joined into
+// a single "Key: Value, Key: Value" line for display alongside the result.
+export function getReferenceValue(field) {
+  const rv = field.referenceValue;
+  if (!rv || rv.type === "none") return null;
+  if (rv.type === "text" || rv.type === "textarea") return rv.data?.value || null;
+  if (rv.type === "keyvalue" && Array.isArray(rv.data)) {
+    const pairs = rv.data.filter((p) => p.key || p.value).map((p) => `${p.key}: ${p.value}`);
+    return pairs.length ? pairs.join(", ") : null;
+  }
+  return null;
+}
+
 // ─── Payload builder ────────────────────────────────────────────────────────
 // `name` on the payload now comes from the test itself (test.name / resolvedName),
 // not the schema — a schema can be reused across multiple tests, so its own
@@ -165,7 +204,13 @@ function buildPayload(schema, values, patientAge, patientGender, testName) {
         if (field.type === "number") {
           const rangeInfo = getStandardRangeInfo(field, patientAge, patientGender);
           const evaluated = evaluateStatus(val, rangeInfo);
-          if (evaluated) entry.referenceTag = evaluated.label;
+          if (evaluated) {
+            entry.referenceRange = evaluated.range;
+            entry.referenceTag = evaluated.label;
+          }
+        } else if (field.type === "input" || field.type === "textarea") {
+          const refValue = getReferenceValue(field);
+          if (refValue) entry.referenceValue = refValue;
         }
         sd[field.name] = entry;
       }
@@ -400,8 +445,21 @@ function DropdownField({ field, options = [], value, onChange, error, originalVa
 
 function TextareaField({ field, value, onChange, error, originalValue, isEditMode }) {
   const isChanged = isEditMode && originalValue !== undefined && value !== (originalValue ?? "");
+  const refValue = getReferenceValue(field);
+  const footer =
+    refValue || error ? (
+      <>
+        {refValue && (
+          <span className="inline-flex items-center gap-1 text-[11px] text-slate-400 font-mono">
+            <Tag className="w-2.5 h-2.5 text-violet-500" />
+            {refValue}
+          </span>
+        )}
+        <FieldError msg={error} />
+      </>
+    ) : null;
   return (
-    <FieldRow field={field} isChanged={isChanged} footer={<FieldError msg={error} />}>
+    <FieldRow field={field} isChanged={isChanged} footer={footer}>
       <div className="flex-1 flex flex-col bg-white">
         <textarea
           value={value}
@@ -420,8 +478,21 @@ function TextareaField({ field, value, onChange, error, originalValue, isEditMod
 
 function TextInputField({ field, value, onChange, error, originalValue, isEditMode }) {
   const isChanged = isEditMode && originalValue !== undefined && value !== (originalValue ?? "");
+  const refValue = getReferenceValue(field);
+  const footer =
+    refValue || error ? (
+      <>
+        {refValue && (
+          <span className="inline-flex items-center gap-1 text-[11px] text-slate-400 font-mono">
+            <Tag className="w-2.5 h-2.5 text-violet-500" />
+            {refValue}
+          </span>
+        )}
+        <FieldError msg={error} />
+      </>
+    ) : null;
   return (
-    <FieldRow field={field} isChanged={isChanged} footer={<FieldError msg={error} />}>
+    <FieldRow field={field} isChanged={isChanged} footer={footer}>
       <div className="relative flex-1 flex items-center bg-white">
         <input
           type="text"
