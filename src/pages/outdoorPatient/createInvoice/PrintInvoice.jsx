@@ -354,11 +354,11 @@ const pdf$ = StyleSheet.create({
   // then the QR code on the right — matches the reference layout while
   // staying on the A5 page.
   patientBox: {
-    marginTop: 3,
+    marginTop: 1,
     marginBottom: 3,
     border: "1.5 solid #000000",
     borderRadius: 0,
-    padding: 8,
+    padding: 4,
     flexDirection: "row",
     alignItems: "stretch",
   },
