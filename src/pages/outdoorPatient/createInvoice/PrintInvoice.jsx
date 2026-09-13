@@ -269,6 +269,9 @@ const isNetworkError = (err) => err?.isAxiosError === true && !err.response;
 // Page carries the symmetric outer margin (A5 print-safe); every section below
 // is inset from that shared padding instead of its own horizontal padding, so
 // left/right margins stay identical all the way down the page.
+//
+// NOTE: no gray anywhere — every rule/border/divider/text color below is pure
+// black (#000000) so the printout reads as solid ink, not faded gray lines.
 
 const PAGE_MARGIN = 18;
 
@@ -288,7 +291,7 @@ const pdf$ = StyleSheet.create({
   // into the patient box too — so this is now just the lab identity block.
   header: {
     alignItems: "center",
-    borderBottom: "1.5 solid #e5e7eb",
+    borderBottom: "1.5 solid #000000",
     paddingBottom: 5,
     // Positioning context for the absolutely-positioned logo below.
     position: "relative",
@@ -339,11 +342,11 @@ const pdf$ = StyleSheet.create({
   // centered now that it's its own row below the logo, so long names have
   // the entire page width to wrap into before needing to shrink.
   labName: { color: "#000000", fontFamily: "Helvetica-Bold", textAlign: "center", width: "100%", lineHeight: 1.15 },
-  poweredBy: { color: "#6b7280", fontSize: 6.5, marginTop: 1, textAlign: "center" },
+  poweredBy: { color: "#000000", fontSize: 6.5, marginTop: 1, textAlign: "center" },
   labAddress: { color: "#000000", fontSize: 8, marginTop: 4, textAlign: "center" },
   labContact: { color: "#000000", fontSize: 7.5, marginTop: 2, textAlign: "center" },
   // sections — horizontal inset now comes solely from the page padding
-  section: { paddingTop: 12, paddingBottom: 12, borderBottom: "1 solid #e5e7eb" },
+  section: { paddingTop: 12, paddingBottom: 12, borderBottom: "1 solid #000000" },
   sectionLast: { paddingTop: 4 },
 
   // ── Patient info box ────────────────────────────────────────────────────
@@ -360,7 +363,7 @@ const pdf$ = StyleSheet.create({
     alignItems: "stretch",
   },
   patientInfoCol: { flex: 1, paddingRight: 8, justifyContent: "center" },
-  patientDivider: { width: 1, backgroundColor: "#d1d5db", marginHorizontal: 8 },
+  patientDivider: { width: 1, backgroundColor: "#000000", marginHorizontal: 8 },
   // Aligned label/value rows — fixed-width label column so every value
   // (Invoice ID, Time, Name, Age/Gender, Contact, Doctor's Name) starts at
   // the same x position.
@@ -393,15 +396,15 @@ const pdf$ = StyleSheet.create({
   // table — outer border wraps the whole grid; column dividers (borderRight
   // on colNum/colName) plus row borders (borderBottom on each row) give it
   // a proper ruled-table look. Padding/font trimmed down further so 15-20
-  // rows comfortably fit on a single A5 page.
+  // rows comfortably fit on a single A5 page. No shading anywhere — every
+  // rule and fill in the table is pure black or white, never gray.
   tableWrapper: { border: "1 solid #000000" },
-  tableHeader: { flexDirection: "row", backgroundColor: "#f3f4f6", padding: "3 6", borderBottom: "1 solid #000000" },
+  tableHeader: { flexDirection: "row", padding: "3 6", borderBottom: "1 solid #000000" },
   tableRow: { flexDirection: "row", padding: "0.5 6", borderBottom: "0.5 solid #000000" },
   tableRowEven: {
     flexDirection: "row",
     padding: "0.5 6",
     borderBottom: "0.5 solid #000000",
-    backgroundColor: "#fafafa",
   },
   colNum: { width: "8%", fontSize: 7.5, color: "#000000", borderRight: "0.5 solid #000000", paddingRight: 3 },
   colName: {
@@ -444,7 +447,7 @@ const pdf$ = StyleSheet.create({
   // Due Amount — bolder/larger than everything else so it stands out.
   dueLabel: { fontSize: 12, fontFamily: "Helvetica-Bold", color: "#000000" },
   dueValue: { fontSize: 14, fontFamily: "Helvetica-Bold", color: "#000000" },
-  dashedDivider: { borderTop: "1 dashed #d1d5db", marginVertical: 5 },
+  dashedDivider: { borderTop: "1 dashed #000000", marginVertical: 5 },
   totalRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 2 },
   totalLabel: { fontSize: 13, fontFamily: "Helvetica-Bold", color: "#000000" },
   totalValue: { fontSize: 16, fontFamily: "Helvetica-Bold", color: "#000000" },
@@ -454,7 +457,7 @@ const pdf$ = StyleSheet.create({
     justifyContent: "flex-end",
     marginTop: 6,
     padding: "4 8",
-    backgroundColor: "#dcfce7",
+    border: "1 solid #000000",
     borderRadius: 4,
   },
   paidBadgeText: { fontSize: 9, fontFamily: "Helvetica-Bold", color: "#000000" },
@@ -662,6 +665,8 @@ const PDFPricingRow = ({ label, value, labelStyle = pdf$.pricingLabel, valueStyl
 );
 
 // ─── Invoice screen card ──────────────────────────────────────────────────────
+// Same rule as the PDF above: no gray anywhere on this card — every border,
+// divider, and table line renders in solid black ink.
 
 const InvoiceCard = ({ invoice, qrCodeUrl, labInfo, downloading = false, sharing = false }) => {
   const { patient, amount, tests, products, reportLink, invoiceId, createdAt } = invoice;
@@ -673,7 +678,7 @@ const InvoiceCard = ({ invoice, qrCodeUrl, labInfo, downloading = false, sharing
       {/* Header — logo centered above the lab name/tagline block, which now
           spans the full header width so the name gets the whole x-axis to
           itself instead of sharing a row with the logo. */}
-      <div className="bg-white border-b border-gray-200 px-6 py-3 relative">
+      <div className="bg-white border-b border-black px-6 py-3 relative">
         {/* Logo — absolutely positioned at the top-left corner, sized well
             up independently of the name/address block. position: absolute
             takes it out of normal document flow entirely, so its footprint
@@ -703,7 +708,7 @@ const InvoiceCard = ({ invoice, qrCodeUrl, labInfo, downloading = false, sharing
             {/* Tagline comes from decoration.tagline — omitted entirely when
                 the lab hasn't set one (no "Powered by LabPilot Pro"
                 placeholder). */}
-            {labInfo.tagline && <p className="text-gray-500 text-[10px] leading-tight">{labInfo.tagline}</p>}
+            {labInfo.tagline && <p className="text-black text-[10px] leading-tight">{labInfo.tagline}</p>}
           </div>
           <div className="mt-1 space-y-1 text-black text-xs">
             <div className="flex items-center justify-center gap-1.5">
@@ -760,7 +765,7 @@ const InvoiceCard = ({ invoice, qrCodeUrl, labInfo, downloading = false, sharing
 
           {qrCodeUrl && (
             <>
-              <div className="w-px bg-gray-300" />
+              <div className="w-px bg-black" />
               <div className="shrink-0 flex flex-col items-center justify-center gap-0.5">
                 <img src={qrCodeUrl} alt="QR Code" className="w-24 h-24" />
                 <p className="text-[9px] text-black text-center leading-tight">Scan to download Reports</p>
@@ -783,10 +788,11 @@ const InvoiceCard = ({ invoice, qrCodeUrl, labInfo, downloading = false, sharing
 
       {/* Tests & Products & Pricing */}
       <div className="px-6 py-2">
-        {/* Unified items table */}
+        {/* Unified items table — every rule and fill is black-on-white, no
+            gray header shading or zebra striping. */}
         <div className="border-2 border-black rounded-none overflow-hidden">
           <table className="w-full border-collapse">
-            <thead className="bg-gray-50">
+            <thead>
               <tr>
                 <th className="px-2 py-1 text-left text-xs font-semibold text-black uppercase w-8 border border-black">
                   #
@@ -822,8 +828,8 @@ const InvoiceCard = ({ invoice, qrCodeUrl, labInfo, downloading = false, sharing
                     price: fmt(unitPrice * qty),
                   };
                 }),
-              ].map((row, i) => (
-                <tr key={row.key} className={i % 2 === 1 ? "bg-gray-50/50" : ""}>
+              ].map((row) => (
+                <tr key={row.key}>
                   <td className="px-2 py-0.5 text-xs text-black border border-black">{row.n}</td>
                   <td className="px-2 py-0.5 text-sm text-black font-bold border border-black">{row.name}</td>
                   <td className="px-2 py-0.5 text-xs text-black text-right font-bold border border-black">
@@ -849,10 +855,10 @@ const InvoiceCard = ({ invoice, qrCodeUrl, labInfo, downloading = false, sharing
               <span className="text-xl font-bold text-black">Total Amount</span>
               <span className="text-2xl font-bold text-black">{fmt(amount.final)}</span>
             </div>
-            <div className="pt-2 border-t border-dashed border-gray-300 space-y-1.5">
+            <div className="pt-2 border-t border-dashed border-black space-y-1.5">
               <div className="flex justify-between text-base">
                 <span className="text-black font-semibold flex items-center gap-1.5">
-                  <Wallet className="w-4 h-4 text-green-600" /> Paid Amount
+                  <Wallet className="w-4 h-4 text-black" /> Paid Amount
                 </span>
                 <span className="font-bold text-black">{fmt(amount.paid)}</span>
               </div>
@@ -865,8 +871,8 @@ const InvoiceCard = ({ invoice, qrCodeUrl, labInfo, downloading = false, sharing
                 />
               )}
               {flags.isFullyPaid && (
-                <div className="flex items-center justify-end gap-1.5 py-1 px-2 bg-green-50 rounded-lg">
-                  <CheckCircle className="w-4 h-4 text-green-600" />
+                <div className="flex items-center justify-end gap-1.5 py-1 px-2 border border-black rounded-lg">
+                  <CheckCircle className="w-4 h-4 text-black" />
                   <span className="text-black text-sm font-semibold tracking-wide uppercase">Fully Paid</span>
                 </div>
               )}
