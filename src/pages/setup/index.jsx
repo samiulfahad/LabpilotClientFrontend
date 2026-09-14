@@ -1,15 +1,33 @@
 import { Link } from "react-router-dom";
-import { FlaskConical, Package, Users, UserCheck, BedDouble, Stethoscope, Lock, Settings2 } from "lucide-react";
+import {
+  FlaskConical,
+  Package,
+  Users,
+  UserCheck,
+  BedDouble,
+  Stethoscope,
+  Lock,
+  Settings2,
+  FileText,
+} from "lucide-react";
 import { useAuthStore } from "../../store/authStore";
 
 const CARDS = [
   {
     title: "ল্যাব টেস্ট",
-    subtitle: "পরীক্ষা সংক্রান্ত সকল তথ্য",
+    subtitle: "মূল্য ও কমিশন ব্যবস্থাপনা",
     icon: FlaskConical,
     link: "/manage-tests",
     color: "blue",
     permission: "manageTests",
+  },
+  {
+    title: "টেস্ট কনফিগারেশন",
+    subtitle: "ফরম্যাট ও নমুনা সংগ্রহ কক্ষ",
+    icon: FileText,
+    link: "/manage-testConfig",
+    color: "teal",
+    permission: "manageTestConfig",
   },
   {
     title: "ঔষধ,পণ্য, সেবা",
@@ -28,8 +46,8 @@ const CARDS = [
     permission: "manageStaffs",
   },
   {
-    title: "রোগী প্রেরণকারী মিডিয়া",
-    subtitle: "মিডিয়া তালিকা ও কমিশন",
+    title: "রোগী প্রেরণকারী মিডিয়া",
+    subtitle: "মিডিয়া তালিকা ও কমিশন",
     icon: UserCheck,
     link: "/manage-referrers",
     color: "purple",
@@ -66,6 +84,16 @@ const colorMap = {
     ring: "group-hover:ring-blue-100",
     focusRing: "focus-visible:ring-blue-400",
     rail: "bg-blue-400",
+  },
+  teal: {
+    bar: "from-teal-500 to-teal-600",
+    iconBox: "bg-teal-50 border-teal-100",
+    icon: "text-teal-600",
+    label: "group-hover:text-teal-900",
+    desc: "group-hover:text-teal-500",
+    ring: "group-hover:ring-teal-100",
+    focusRing: "focus-visible:ring-teal-400",
+    rail: "bg-teal-400",
   },
   amber: {
     bar: "from-amber-500 to-amber-600",

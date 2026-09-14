@@ -61,6 +61,7 @@ import ExpenseList from "./pages/expense/ExpenseList";
 import DeleteExpense from "./pages/expense/DeleteExpense";
 import ExpenseReport from "./pages/dailyReports/expenseReport";
 import DiscountReport from "./pages/dailyReports/discountReport";
+import ManageTestConfig from "./pages/setup/manageTestConfig";
 
 // ─── Route Wrapper for Protected Pages ──────────────────────────────────────
 const ProtectedRoutes = () => {
@@ -190,6 +191,7 @@ function App() {
         <Route element={<RequireModules modules={["setup"]} />}>
           <Route path="/setup" element={<Setup />} />
           <Route path="/manage-tests" element={<ManageTests />} />
+          <Route path="/manage-testConfig" element={<ManageTestConfig />} />
           <Route path="/manage-products" element={<ManageProducts />} />
           <Route path="/manage-referrers" element={<ManageReferrers />} />
           <Route path="/manage-doctors" element={<ManageDoctors />} />

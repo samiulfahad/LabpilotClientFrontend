@@ -84,7 +84,7 @@ const INITIAL_FORM = {
   labAdjustmentAmount: 0,
   paidAmount: "",
   paymentMode: "cash",
-  onlineFeeEnabled: false,
+  onlineFeeEnabled: true,
   onlineFeePaidBy: "lab",
 };
 

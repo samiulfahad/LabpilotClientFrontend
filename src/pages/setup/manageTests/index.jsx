@@ -19,11 +19,8 @@ import {
   Check,
   CheckCircle2,
   AlertCircle,
-  FileText,
   Banknote,
   Percent,
-  Loader2,
-  XCircle,
   AlertTriangle,
   Layers,
 } from "lucide-react";
@@ -103,226 +100,6 @@ const blurInput = (e) => {
 // (browser default behavior) — blur on wheel so scrolling the page never
 // silently edits a price/commission value.
 const blockWheelChange = (e) => e.target.blur();
-
-// ══════════════════════════════════════════════════════════════════════════════
-// Format Modal
-// ══════════════════════════════════════════════════════════════════════════════
-const FormatModal = ({ test, onClose, onSave, onNetworkError }) => {
-  const [schemas, setSchemas] = useState([]);
-  const [selectedSchemaId, setSelectedSchemaId] = useState(test.schemaId ?? null);
-  const [loadingSchemas, setLoadingSchemas] = useState(false);
-  const [schemaError, setSchemaError] = useState(null);
-  const [saving, setSaving] = useState(false);
-  const [apiError, setApiError] = useState("");
-
-  useEffect(() => {
-    if (!test.testId) return;
-    const load = async () => {
-      setLoadingSchemas(true);
-      setSchemaError(null);
-      try {
-        const res = await testService.getSchemasByTestId(test.testId);
-        setSchemas(res.data ?? []);
-      } catch (err) {
-        if (isNetworkError(err)) {
-          setSchemaError("ইন্টারনেট সংযোগ নেই। দয়া করে সংযোগ চেক করুন।");
-          onNetworkError?.();
-        } else {
-          setSchemaError(getErrorMessage(err, "Could not load formats"));
-        }
-        setSchemas([]);
-      } finally {
-        setLoadingSchemas(false);
-      }
-    };
-    load();
-  }, [test.testId]);
-
-  const handleSubmit = async () => {
-    setSaving(true);
-    setApiError("");
-    try {
-      await testService.updateSchema(test._id, selectedSchemaId);
-      onSave({ ...test, schemaId: selectedSchemaId });
-    } catch (err) {
-      if (isNetworkError(err)) {
-        setApiError("ইন্টারনেট সংযোগ নেই। দয়া করে সংযোগ চেক করুন।");
-        onNetworkError?.();
-      } else if (getErrorStatus(err) === 404) {
-        onSave({ ...test, __notFound: true });
-        return;
-      } else {
-        setApiError(getErrorMessage(err, "ফরম্যাট সংরক্ষণ ব্যর্থ।"));
-      }
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Modal isOpen size="md" onClose={onClose}>
-      <div className="flex flex-col max-h-[calc(100svh-96px)] overflow-hidden">
-        {/* Header */}
-        <div
-          className="shrink-0 px-6 py-5 flex items-center justify-between border-b border-[#0D948820]"
-          style={{ background: "linear-gradient(135deg,#0D948815 0%,#0F766E08 100%)" }}
-        >
-          <div className="flex items-center gap-3.5">
-            <div
-              className="flex items-center justify-center shrink-0 w-11 h-11 rounded-[14px] shadow-[0_8px_20px_#0D948840]"
-              style={{ background: "linear-gradient(135deg,#0D9488,#0F766E)" }}
-            >
-              <FileText className="w-[18px] h-[18px] text-white" />
-            </div>
-            <div>
-              <p className="font-['IBM_Plex_Mono',monospace] text-[10px] font-bold uppercase tracking-[0.1em] mb-[2px] text-[#0D9488]">
-                ফরম্যাট নির্বাচন
-              </p>
-              <p className="font-['IBM_Plex_Sans',sans-serif] text-base font-bold text-[#0F172A] truncate max-w-[320px]">
-                {test.name}
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="flex items-center justify-center w-8 h-8 rounded-[10px] text-[#94A3B8] border-[1.5px] border-[#E2E8F0] transition-all hover:bg-[#F1F5F9] hover:text-[#0F172A]"
-          >
-            <X className="w-[15px] h-[15px]" />
-          </button>
-        </div>
-
-        {/* Body */}
-        <div className="px-6 py-5 bg-[#F8FAFC] space-y-4 flex-1 min-h-0 overflow-y-auto">
-          <div className="bg-white rounded-xl p-4 border border-[#E2E8F0] shadow-[0_2px_8px_rgba(15,23,42,0.04)]">
-            <p className="font-['IBM_Plex_Mono',monospace] text-[9px] font-bold uppercase tracking-[0.1em] text-[#94A3B8] mb-1">
-              উপলব্ধ ফরম্যাট
-            </p>
-            <p className="font-['IBM_Plex_Mono',monospace] text-[11px] text-[#94A3B8] mb-3">
-              {selectedSchemaId
-                ? "এই টেস্টটি বর্তমানে অনলাইনে আছে। ভিন্ন ফরম্যাট নির্বাচন করুন বা অফলাইন করুন।"
-                : "অনলাইনে দেখানোর জন্য একটি ফরম্যাট নির্বাচন করুন।"}
-            </p>
-
-            {selectedSchemaId && (
-              <div className="mb-3 p-3 rounded-xl border-[1.5px] border-[#F59E0B60] bg-[#F59E0B0C] flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-[#F59E0B] rounded-full animate-pulse" />
-                  <span className="font-['IBM_Plex_Mono',monospace] text-xs font-bold text-[#F59E0B]">অনলাইন আছে</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedSchemaId(null)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 font-['IBM_Plex_Mono',monospace] text-[11px] font-bold text-white rounded-lg transition-all"
-                  style={{ background: "linear-gradient(135deg,#EF4444,#DC2626)" }}
-                >
-                  <XCircle className="w-3.5 h-3.5" /> অফলাইন করুন
-                </button>
-              </div>
-            )}
-
-            {loadingSchemas ? (
-              <div className="flex items-center justify-center py-8 gap-2">
-                <Loader2 className="w-5 h-5 text-[#0D9488] animate-spin" />
-                <span className="font-['IBM_Plex_Mono',monospace] text-xs text-[#94A3B8]">লোড হচ্ছে…</span>
-              </div>
-            ) : schemaError ? (
-              <div className="px-4 py-3 rounded-xl border-[1.5px] border-[#EF444430] bg-[#EF444408] text-center">
-                <p className="font-['IBM_Plex_Mono',monospace] text-xs text-[#EF4444]">{schemaError}</p>
-              </div>
-            ) : schemas.length === 0 ? (
-              <div className="px-4 py-6 rounded-xl border-[1.5px] border-dashed border-[#E2E8F0] bg-[#F8FAFC] text-center">
-                <FlaskConical className="w-6 h-6 text-[#CBD5E1] mx-auto mb-2" />
-                <p className="font-['IBM_Plex_Mono',monospace] text-xs text-[#94A3B8]">কোনো ফরম্যাট নেই</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {schemas.map((schema) => {
-                  const isSelected = selectedSchemaId === schema._id;
-                  return (
-                    <div
-                      key={schema._id}
-                      onClick={() => setSelectedSchemaId(schema._id)}
-                      className={`flex items-center justify-between px-3 py-2.5 rounded-xl border-[1.5px] transition-all cursor-pointer ${
-                        isSelected
-                          ? "border-[#0D9488] bg-[#0D948808]"
-                          : "border-[#E2E8F0] bg-white hover:border-[#CBD5E1]"
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <span
-                          className="flex items-center justify-center w-4 h-4 rounded-full border-[1.5px] shrink-0"
-                          style={{
-                            borderColor: isSelected ? C.teal : "#CBD5E1",
-                            background: isSelected ? C.teal : "transparent",
-                          }}
-                        >
-                          {isSelected && <span className="w-1.5 h-1.5 bg-white rounded-full" />}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          {schema.description && (
-                            <p className="font-['IBM_Plex_Mono',monospace] text-[11px] text-[#94A3B8] truncate mt-0.5">
-                              {schema.description}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0 ml-3">
-                        {isSelected && (
-                          <span className="flex items-center gap-1 font-['IBM_Plex_Mono',monospace] text-[10px] font-bold text-[#0D9488] bg-[#0D948812] px-1.5 py-px rounded-[5px]">
-                            <CheckCircle2 className="w-3 h-3" /> নির্বাচিত
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="shrink-0 border-t border-[#E2E8F0] bg-white">
-          {apiError && (
-            <div className="mx-6 mt-4 flex items-start gap-2.5 px-4 py-3 bg-[#EF444408] border-[1.5px] border-[#EF444430] rounded-xl">
-              <AlertTriangle className="w-[14px] h-[14px] text-[#EF4444] shrink-0 mt-[1px]" />
-              <span className="text-xs font-['IBM_Plex_Mono',monospace] text-[#EF4444]">{apiError}</span>
-            </div>
-          )}
-          <div className="px-6 py-4 flex gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={saving}
-              className="flex-1 py-2.5 font-semibold transition-all rounded-xl border-[1.5px] border-[#E2E8F0] text-[#64748B] font-['IBM_Plex_Mono',monospace] text-xs bg-white hover:bg-[#F1F5F9]"
-            >
-              Close
-            </button>
-            {schemas.length > 0 && (
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={saving}
-                className="flex-1 py-2.5 flex items-center justify-center gap-2 font-semibold transition-all rounded-xl border-none text-white font-['IBM_Plex_Mono',monospace] text-xs"
-                style={{
-                  background: saving ? C.muted : "linear-gradient(135deg,#0D9488,#0F766E)",
-                  boxShadow: saving ? "none" : "0 4px 14px rgba(13,148,136,0.4)",
-                }}
-              >
-                {saving ? (
-                  <span className="animate-spin inline-block w-[14px] h-[14px] rounded-full border-2 border-white/40 border-t-white" />
-                ) : (
-                  <CheckCircle2 className="w-[13px] h-[13px]" />
-                )}
-                Save Format
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-    </Modal>
-  );
-};
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Amount Modal (used for both price and commission)
@@ -1204,7 +981,7 @@ const Avatar = ({ name }) => {
   );
 };
 
-const TestCard = ({ test, onConfigureFormat, onConfigurePrice, onConfigureCommission, onDelete }) => {
+const TestCard = ({ test, onConfigurePrice, onConfigureCommission, onDelete }) => {
   const [expanded, setExpanded] = useState(false);
   const statusGrad = test.isOnline
     ? "linear-gradient(135deg,#10B981,#059669)"
@@ -1267,7 +1044,6 @@ const TestCard = ({ test, onConfigureFormat, onConfigurePrice, onConfigureCommis
               </span>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              <ActionChip onClick={onConfigureFormat} icon={FileText} label="Format" color={C.teal} />
               <ActionChip onClick={onConfigurePrice} icon={Banknote} label="Change Price" color={C.blue} />
               <ActionChip onClick={onConfigureCommission} icon={Percent} label="Change Commission" color={C.purple} />
               <ActionChip onClick={onDelete} icon={Trash2} label="Delete" color={C.red} />
@@ -1371,7 +1147,6 @@ const ManageTests = () => {
   const [popup, setPopup] = useState(null);
   const [offlinePopup, setOfflinePopup] = useState(false); // ← new
   const [addModal, setAddModal] = useState(false);
-  const [formatTest, setFormatTest] = useState(null);
   const [priceTest, setPriceTest] = useState(null);
   const [commissionTest, setCommissionTest] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -1471,18 +1246,6 @@ const ManageTests = () => {
 
   const handleNetworkError = () => setOfflinePopup(true);
 
-  const handleFormatSave = (updatedTest) => {
-    if (updatedTest.__notFound) {
-      setTests((prev) => prev.filter((t) => t._id !== updatedTest._id));
-      setFormatTest(null);
-      setPopup({ type: "error", message: "টেস্টটি আর পাওয়া যায়নি।" });
-      return;
-    }
-    setTests((prev) => prev.map((t) => (t._id === updatedTest._id ? { ...t, ...updatedTest } : t)));
-    setFormatTest(null);
-    setPopup({ type: "success", message: "ফরম্যাট সংরক্ষিত।" });
-  };
-
   const handlePriceSave = (updatedTest) => {
     if (updatedTest.__notFound) {
       setTests((prev) => prev.filter((t) => t._id !== updatedTest._id));
@@ -1525,15 +1288,6 @@ const ManageTests = () => {
           existingTests={tests}
           onClose={() => setAddModal(false)}
           onSaved={handleAdded}
-          onNetworkError={handleNetworkError}
-        />
-      )}
-
-      {formatTest && (
-        <FormatModal
-          test={formatTest}
-          onClose={() => setFormatTest(null)}
-          onSave={handleFormatSave}
           onNetworkError={handleNetworkError}
         />
       )}
@@ -1711,7 +1465,6 @@ const ManageTests = () => {
                     <TestCard
                       key={test._id}
                       test={test}
-                      onConfigureFormat={() => setFormatTest(test)}
                       onConfigurePrice={() => setPriceTest(test)}
                       onConfigureCommission={() => setCommissionTest(test)}
                       onDelete={() => setDeleteTarget(test)}

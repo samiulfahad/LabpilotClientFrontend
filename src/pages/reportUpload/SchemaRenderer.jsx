@@ -272,6 +272,17 @@ function FieldRow({ field, isChanged, borderCls, footer, children }) {
   );
 }
 
+// Shared unit suffix box, used by number, text and textarea fields alike —
+// matches the label prefix box's styling on the trailing edge of the pill.
+function UnitSuffix({ unit }) {
+  if (!unit) return null;
+  return (
+    <span className="shrink-0 flex items-center px-3 bg-[#f0f0f0] border-l border-slate-200 text-xs font-medium text-slate-500">
+      {unit}
+    </span>
+  );
+}
+
 // ─── Field types ───────────────────────────────────────────────────────────────
 
 function NumberField({ field, value, onChange, error, patientAge, patientGender, originalValue, isEditMode }) {
@@ -319,11 +330,7 @@ function NumberField({ field, value, onChange, error, patientAge, patientGender,
         onWheel={(e) => e.currentTarget.blur()}
         className="flex-1 min-w-0 px-3 py-2.5 bg-white text-sm font-mono text-slate-900 focus:outline-none"
       />
-      {field.unit && (
-        <span className="shrink-0 flex items-center px-3 bg-[#f0f0f0] border-l border-slate-200 text-xs font-medium text-slate-500">
-          {field.unit}
-        </span>
-      )}
+      <UnitSuffix unit={field.unit} />
     </FieldRow>
   );
 }
@@ -472,6 +479,7 @@ function TextareaField({ field, value, onChange, error, originalValue, isEditMod
           {(value || "").length}/{field.maxLength}
         </div>
       </div>
+      <UnitSuffix unit={field.unit} />
     </FieldRow>
   );
 }
@@ -508,6 +516,7 @@ function TextInputField({ field, value, onChange, error, originalValue, isEditMo
           </span>
         )}
       </div>
+      <UnitSuffix unit={field.unit} />
     </FieldRow>
   );
 }
