@@ -4,13 +4,9 @@ import {
   CheckCircle2,
   XCircle,
   ChevronDown,
-  Info,
-  TrendingUp,
-  TrendingDown,
   User,
   RotateCcw,
   Send,
-  AlertTriangle,
   Eye,
   ShieldCheck,
   Pencil,
@@ -51,10 +47,10 @@ function formatAge(age) {
 
 // ─── Range logic ─────────────────────────────────────────────────────────────
 // standardRange.data is tier-based: an array of { label, comparator, min,
-// max } (Simple), or age/gender/combined brackets each holding such an
-// array — mirrors SchemaBuilder exactly. There is no more plain min/max
-// mode, so a field's range always resolves to a set of tiers to match the
-// value against.
+// max } (Simple), or age/gender brackets each holding such an array —
+// mirrors SchemaBuilder / the admin SchemaRenderer exactly. Only none /
+// simple / age / gender scopes exist now — the old "combined" (age+gender)
+// scope has been dropped entirely, matching the admin builder.
 
 export function getStandardRangeInfo(field, patientAge, patientGender) {
   const sr = field.standardRange;
@@ -69,12 +65,6 @@ export function getStandardRangeInfo(field, patientAge, patientGender) {
     tiers = bracket?.tiers || [];
   } else if (sr.type === "gender" && patientGender && sr.data) {
     tiers = sr.data[patientGender] || [];
-  } else if (sr.type === "combined" && hasAge(patientAge) && patientGender && Array.isArray(sr.data)) {
-    const ageVal = ageToValue(patientAge);
-    const bracket = sr.data.find(
-      (b) => b.gender === patientGender && ageVal >= ageToValue(b.minAge) && ageVal <= ageToValue(b.maxAge),
-    );
-    tiers = bracket?.tiers || [];
   }
 
   if (!tiers || tiers.length === 0) return null;
@@ -105,7 +95,7 @@ function tierMatches(t, v) {
 
 // Human-readable rendering of a tier's own bounds, e.g. "70–100", "> 10",
 // "≤ 5" — this is what belongs in a report's Ref. Range column. Distinct
-// from the tier's label (e.g. "High"), which belongs in Status instead.
+// from the tier's label (e.g. "High"), which is just printed as-is.
 function formatTierRange(t) {
   const comparator = t.comparator || "between";
   const hasMin = t.min !== "" && t.min !== null && t.min !== undefined;
@@ -128,6 +118,9 @@ function formatTierRange(t) {
   }
 }
 
+// No more low/high/normal classification — just resolve which tier the
+// value fell into and hand back its label/range as-is, to be printed as a
+// plain tag. Mirrors the admin renderer exactly.
 export function evaluateStatus(value, rangeInfo) {
   if (!rangeInfo || value === "" || value === null || value === undefined) return null;
   const v = parseFloat(value);
@@ -136,23 +129,7 @@ export function evaluateStatus(value, rangeInfo) {
   const tier = rangeInfo.tiers.find((t) => tierMatches(t, v));
   if (!tier) return null;
 
-  const label = (tier.label || "").toLowerCase();
-  let status = "tag";
-  if (/low/.test(label)) status = "low";
-  else if (/high/.test(label)) status = "high";
-  else if (/normal|unremarkable|negative/.test(label)) status = "normal";
-  return { status, label: tier.label, range: formatTierRange(tier) };
-}
-
-// Convenience for callers that already have a plain { min, max } (not a
-// field's standardRange) and just want low/normal/high classification.
-export function getRangeStatus(value, range) {
-  if (!range || value === "" || value === null || value === undefined) return "neutral";
-  const v = parseFloat(value);
-  if (isNaN(v)) return "neutral";
-  if (v < range.min) return "low";
-  if (v > range.max) return "high";
-  return "normal";
+  return { label: tier.label, range: formatTierRange(tier) };
 }
 
 export function hydrateValuesFromReport(schema, existingReport) {
@@ -223,19 +200,24 @@ function buildPayload(schema, values, patientAge, patientGender, testName) {
 
 // ─── Shared UI primitives ──────────────────────────────────────────────────────
 
-const STATUS_BADGE = {
-  normal: { icon: CheckCircle2, label: "Normal", cls: "bg-emerald-50 text-emerald-600 border-emerald-200" },
-  low: { icon: TrendingDown, label: "Low", cls: "bg-orange-50 text-orange-600 border-orange-200" },
-  high: { icon: TrendingUp, label: "High", cls: "bg-red-50 text-red-600 border-red-200" },
-  tag: { icon: Tag, label: null, cls: "bg-violet-50 text-violet-600 border-violet-200" },
-};
-
 const EditedBadge = () => (
   <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-violet-50 border border-violet-200 text-violet-600 text-[10px] font-semibold shrink-0">
     <Pencil className="w-2.5 h-2.5" />
     edited
   </span>
 );
+
+// Plain tag badge — no low/high/normal styling, just the matched tier's
+// label. Mirrors the admin renderer's RangeBadge exactly.
+const RangeBadge = ({ evaluated }) => {
+  if (!evaluated) return null;
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-semibold bg-violet-50 text-violet-600 border-violet-200">
+      <Tag className="w-2.5 h-2.5" />
+      {evaluated.label}
+    </span>
+  );
+};
 
 const FieldError = ({ msg }) =>
   msg ? (
@@ -290,30 +272,19 @@ function NumberField({ field, value, onChange, error, patientAge, patientGender,
   const evaluated = evaluateStatus(value, rangeInfo);
   const hasValue = value !== "" && value !== null && value !== undefined;
   const isChanged = isEditMode && originalValue !== undefined && String(value) !== String(originalValue ?? "");
-  const badge = hasValue && evaluated && STATUS_BADGE[evaluated.status];
 
   let borderCls = "border-slate-800";
   if (error) borderCls = "border-red-500";
   else if (isChanged) borderCls = "border-violet-500";
-  else if (evaluated?.status === "normal") borderCls = "border-emerald-500";
-  else if (evaluated?.status === "low") borderCls = "border-orange-500";
-  else if (evaluated?.status === "high") borderCls = "border-red-500";
-  else if (evaluated?.status === "tag") borderCls = "border-violet-500";
+  else if (hasValue && evaluated) borderCls = "border-violet-500";
 
   const footer =
-    rangeInfo || badge ? (
+    rangeInfo || (hasValue && evaluated) ? (
       <>
         {rangeInfo && (
           <span className="text-[11px] text-slate-400 font-mono">Ranges set{field.unit ? ` (${field.unit})` : ""}</span>
         )}
-        {badge && (
-          <span
-            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-semibold ${badge.cls}`}
-          >
-            <badge.icon className="w-2.5 h-2.5" />
-            {badge.label || evaluated.label}
-          </span>
-        )}
+        {hasValue && <RangeBadge evaluated={evaluated} />}
       </>
     ) : null;
 
@@ -703,12 +674,6 @@ function PatientBanner({ invoice }) {
 // ─── Alert banner ─────────────────────────────────────────────────────────────
 
 const ALERT_STYLES = {
-  amber: {
-    wrap: "bg-amber-50 border-amber-400",
-    title: "text-amber-800",
-    body: "text-amber-700",
-    icon: "text-amber-500",
-  },
   red: { wrap: "bg-red-50 border-red-400", title: "text-red-800", body: "text-red-700", icon: "text-red-500" },
   violet: {
     wrap: "bg-violet-50 border-violet-400",
@@ -737,7 +702,6 @@ function StatTile({ label, value, tone }) {
   const toneCls = {
     default: "text-slate-900",
     green: "text-emerald-600",
-    red: "text-red-600",
     violet: "text-violet-600",
     blue: "text-blue-600",
   };
@@ -848,17 +812,6 @@ function SchemaRenderer({
   }).length;
   const progress = totalFields > 0 ? (totalFilled / totalFields) * 100 : null;
 
-  const numStatuses = schema.sections.flatMap((sec, si) =>
-    sec.fields
-      .filter((f) => f.type === "number")
-      .map((f) => {
-        const rangeInfo = getStandardRangeInfo(f, patientAge, patientGender);
-        return evaluateStatus(values[`${si}_${f.name}`], rangeInfo);
-      }),
-  );
-  const abnormalCount = numStatuses.filter((s) => s && (s.status === "high" || s.status === "low")).length;
-  const normalCount = numStatuses.filter((s) => s && s.status === "normal").length;
-
   if (!hasFields) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center px-4 font-noto">
@@ -900,12 +853,8 @@ function SchemaRenderer({
               {isEditMode ? <Pencil className="w-5 h-5 text-white" /> : <Activity className="w-5 h-5 text-white" />}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-wide text-slate-400 mb-1">
-                <span>{isEditMode ? "Lab Report · Edit" : "Lab Report Entry"}</span>
-                <span className="w-[3px] h-[3px] rounded-full bg-slate-300" />
-                <span className={schema.isActive ? "text-emerald-500" : "text-slate-400"}>
-                  {schema.isActive ? "● Active" : "○ Inactive"}
-                </span>
+              <div className="text-[11px] font-mono uppercase tracking-wide text-slate-400 mb-1">
+                {isEditMode ? "Lab Report · Edit" : "Lab Report Entry"}
               </div>
               <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
                 {testName || schema.name || "Untitled Schema"}
@@ -916,7 +865,7 @@ function SchemaRenderer({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
             {progress !== null && (
               <StatTile
                 label="Progress"
@@ -925,8 +874,6 @@ function SchemaRenderer({
               />
             )}
             <StatTile label="Filled" value={`${totalFilled}/${totalFields}`} />
-            <StatTile label="In Range" value={normalCount} tone={normalCount > 0 ? "green" : "default"} />
-            <StatTile label="Abnormal" value={abnormalCount} tone={abnormalCount > 0 ? "red" : "default"} />
             {isEditMode && (
               <StatTile label="Changes" value={totalChanges} tone={totalChanges > 0 ? "violet" : "default"} />
             )}
@@ -949,14 +896,6 @@ function SchemaRenderer({
             </div>
           )}
         </div>
-
-        {/* Alerts */}
-        {abnormalCount > 0 && (
-          <Alert tone="amber" icon={AlertTriangle} title="Abnormal Values Detected">
-            {abnormalCount} result{abnormalCount > 1 ? "s" : ""} outside the standard reference range — please review
-            before submitting.
-          </Alert>
-        )}
 
         {isEditMode && totalChanges > 0 && (
           <Alert tone="violet" icon={Pencil} title="Unsaved Changes">
@@ -986,24 +925,6 @@ function SchemaRenderer({
             />
           ))}
         </div>
-
-        {/* Static range note — rendered with whitespace-pre-wrap so
-            newlines/spacing in the DB value (e.g. a multi-line reference
-            table) render exactly as stored, instead of being collapsed
-            into a single line by default HTML whitespace handling. */}
-        {schema.hasStaticStandardRange && schema.staticStandardRange && (
-          <div className="bg-white rounded-xl border border-amber-200 overflow-hidden">
-            <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border-b border-amber-200">
-              <Info className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-              <h3 className="text-xs font-bold uppercase tracking-wide text-amber-800">Standard Reference</h3>
-            </div>
-            <div className="bg-amber-50/40 p-4">
-              <p className="text-xs font-semibold text-black whitespace-pre-wrap leading-relaxed">
-                {schema.staticStandardRange}
-              </p>
-            </div>
-          </div>
-        )}
 
         {/* Validation errors */}
         {Object.keys(errors).length > 0 && (

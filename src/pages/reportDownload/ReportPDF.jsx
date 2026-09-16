@@ -1,341 +1,393 @@
 import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
 
-// Fallback pad height (mm) used when a lab hasn't set medicalReport.padHeight
-// — mirrors the same constant/fallback in ReportViewer.jsx's buildPrintHTML.
+// Fallback pad height (mm) used when a lab hasn't set medicalReport.padHeight.
 const DEFAULT_PAD_HEIGHT_MM = 38;
 
-const C = {
-  dark: "#000000",
-  slate700: "#334155",
-  slate600: "#000000",
-  slate400: "#000000",
-  slate200: "#e2e8f0",
-  slate100: "#f1f5f9",
-  slate50: "#f8fafc",
-  body: "#000000",
-  normal: "#166534",
-  low: "#92400e",
-  high: "#991b1b",
-  tag: "#6d28d9",
-  lowBg: "#fffbeb",
-  highBg: "#fef2f2",
-  normBg: "#f0fdf4",
-  tagBg: "#f5f3ff",
-  lowBdr: "#fde68a",
-  highBdr: "#fecaca",
-  normBdr: "#bbf7d0",
-  tagBdr: "#ddd6fe",
-};
+// Every color in this document is grayscale on purpose — this is a
+// black-ink-on-white-paper report, not a screen UI.
+const BLACK = "#000000";
+const LINE = "#000000";
+const HEAD_BG = "#ececec";
+const ALT_BG = "#f8f8f8";
+const ABNORMAL_BG = "#e6e6e6"; // used for the matched-tier row inside RefTierBoxPDF
 
 const s = StyleSheet.create({
-  page: { fontFamily: "Helvetica", fontSize: 9, color: C.dark, paddingBottom: 80 },
+  page: { fontFamily: "Helvetica", fontSize: 9, color: BLACK, padding: 28, paddingBottom: 92 },
 
-  header: {
-    borderBottom: `2 solid ${C.dark}`,
-    padding: "12 16",
+  letterhead: {
     flexDirection: "row",
     justifyContent: "space-between",
-    backgroundColor: "white",
+    alignItems: "flex-start",
+    borderBottom: `2 solid ${LINE}`,
+    paddingBottom: 10,
+    marginBottom: 10,
   },
-  labName: { fontSize: 14, fontFamily: "Helvetica-Bold", color: C.dark },
-  labSub: {
-    fontSize: 7.5,
-    fontFamily: "Helvetica-Bold",
-    color: C.slate400,
-    marginTop: 2,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
-  labAddr: { fontSize: 7, fontFamily: "Helvetica-Bold", color: C.slate400, marginTop: 4 },
+  labName: { fontSize: 16, fontFamily: "Helvetica-Bold", color: BLACK, textTransform: "uppercase", letterSpacing: 0.6 },
+  labTagline: { fontSize: 8, color: BLACK, marginTop: 3, fontFamily: "Helvetica-Oblique" },
+  labAddr: { fontSize: 7.5, color: BLACK, marginTop: 4 },
   headerRight: { alignItems: "flex-end" },
-  headerContact: { fontSize: 8, fontFamily: "Helvetica-Bold", color: C.slate600, marginBottom: 2 },
-  headerReg: { fontSize: 7, color: C.slate400, fontFamily: "Courier-Bold" },
+  headerLine: { fontSize: 7.5, color: BLACK, marginBottom: 2 },
 
   titleBar: {
-    backgroundColor: C.slate50,
-    padding: "7 16",
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    borderBottom: `1 solid ${C.slate200}`,
+    borderBottom: `1 solid ${LINE}`,
+    paddingBottom: 6,
+    marginBottom: 10,
   },
-  titleText: { fontSize: 11, fontFamily: "Helvetica-Bold", color: C.dark },
-  invoiceText: { fontSize: 7.5, color: C.slate600, fontFamily: "Courier-Bold" },
+  titleText: { fontSize: 12.5, fontFamily: "Helvetica-Bold", textTransform: "uppercase", letterSpacing: 0.6 },
+  invoiceText: { fontSize: 8, fontFamily: "Courier" },
 
-  patientRow: { flexDirection: "row", borderBottom: `1 solid ${C.slate200}` },
-  patientCell: { flex: 1, padding: "6 10", backgroundColor: "white", borderRight: `1 solid ${C.slate200}` },
+  patientTable: { border: `1 solid ${LINE}`, marginBottom: 10 },
+  patientRow: { flexDirection: "row" },
+  patientCell: { flex: 1, borderRight: `1 solid ${LINE}`, borderBottom: `1 solid ${LINE}`, padding: "5 8" },
+  patientCellLast: { flex: 1, borderBottom: `1 solid ${LINE}`, padding: "5 8" },
   cellLabel: {
     fontSize: 6.5,
-    fontFamily: "Helvetica-Bold",
-    color: C.slate400,
     textTransform: "uppercase",
-    letterSpacing: 0.6,
-    marginBottom: 2.5,
+    letterSpacing: 0.5,
+    marginBottom: 2,
+    fontFamily: "Helvetica-Bold",
   },
-  cellValue: { fontSize: 9.5, fontFamily: "Helvetica-Bold", color: C.dark },
+  cellValue: { fontSize: 9, fontFamily: "Helvetica-Bold", color: BLACK },
+  referredRow: { flexDirection: "row", alignItems: "center", gap: 6, padding: "5 8" },
 
-  referredRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: "5 10",
-    backgroundColor: "#fafafa",
-    borderBottom: `1 solid ${C.slate200}`,
-    gap: 8,
-  },
-
-  summaryBar: {
-    backgroundColor: C.slate50,
-    padding: "5 16",
-    flexDirection: "row",
-    gap: 8,
-    alignItems: "center",
-    borderBottom: `1 solid ${C.slate200}`,
-  },
-
-  sectionWrap: { marginBottom: 8, border: `1 solid ${C.slate200}` },
+  sectionWrap: { border: `1 solid ${LINE}`, marginBottom: 10 },
   sectionHead: {
-    backgroundColor: C.slate700,
-    padding: "6 12",
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    gap: 6,
+    backgroundColor: HEAD_BG,
+    borderBottom: `1 solid ${LINE}`,
+    padding: "6 8",
   },
-  sectionName: { fontSize: 9, fontFamily: "Helvetica-Bold", color: "white" },
-  sectionCount: { fontSize: 7, color: "rgba(255,255,255,0.6)", textTransform: "uppercase", letterSpacing: 0.5 },
+  sectionBadge: {
+    width: 16,
+    height: 16,
+    border: `1 solid ${LINE}`,
+    backgroundColor: "#ffffff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sectionBadgeTxt: { fontSize: 7.5, fontFamily: "Helvetica-Bold", color: BLACK },
+  sectionName: {
+    flex: 1,
+    fontSize: 9.5,
+    fontFamily: "Helvetica-Bold",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+    color: BLACK,
+  },
 
-  tableHead: {
-    flexDirection: "row",
-    backgroundColor: C.slate50,
-    borderBottom: `1 solid ${C.slate200}`,
-    padding: "3 0",
-  },
+  tableHead: { flexDirection: "row", backgroundColor: HEAD_BG, borderBottom: `1 solid ${LINE}` },
   th: {
     fontSize: 7,
     fontFamily: "Helvetica-Bold",
-    color: "#000000",
     textTransform: "uppercase",
-    paddingHorizontal: 8,
     letterSpacing: 0.3,
+    padding: "5 8",
+    borderRight: `1 solid ${LINE}`,
+    color: BLACK,
+    flexShrink: 1,
   },
-  tableRow: { flexDirection: "row", borderBottom: `1 solid ${C.slate100}`, paddingVertical: 5 },
-  td: { fontSize: 9, paddingHorizontal: 8, color: C.body, fontFamily: "Helvetica-Bold" },
-  tdBold: { fontSize: 9, paddingHorizontal: 8, fontFamily: "Helvetica-Bold" },
-  tdMono: { fontSize: 9, paddingHorizontal: 8, fontFamily: "Courier-Bold", color: C.slate600 },
-  tdUnit: {
-    fontSize: 7.5,
+  thLast: {
+    fontSize: 7,
     fontFamily: "Helvetica-Bold",
-    paddingHorizontal: 8,
-    color: C.slate400,
-  },
-  pill: { paddingHorizontal: 5, paddingVertical: 1.5 },
-
-  // ── Static standard range sidebar ──────────────────────────────────────────
-  rangeBoxWrap: { border: `1 solid ${C.slate200}` },
-  rangeBoxHead: { backgroundColor: C.slate700, padding: "6 12" },
-  rangeBoxHeadText: {
-    fontSize: 8,
-    fontFamily: "Helvetica-Bold",
-    color: "white",
     textTransform: "uppercase",
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
+    padding: "5 8",
+    color: BLACK,
+    flexShrink: 1,
   },
-  rangeBox: {
-    backgroundColor: C.slate50,
-    padding: 8,
-  },
-  rangeBoxText: { fontSize: 8, fontFamily: "Helvetica-Bold", color: C.slate600, lineHeight: 1.4 },
+  tableRow: { flexDirection: "row", borderBottom: `1 solid ${LINE}` },
+  tableRowAlt: { backgroundColor: ALT_BG },
+  td: { fontSize: 9, padding: "5 8", borderRight: `1 solid ${LINE}`, color: BLACK, flexShrink: 1 },
+  tdLast: { fontSize: 9, padding: "5 8", color: BLACK, flexShrink: 1 },
+  tdBold: { fontFamily: "Helvetica-Bold" },
+  tdMuted: { fontSize: 8, color: BLACK },
 
-  footer: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: "10 16",
-    borderTop: `1 solid ${C.slate200}`,
-    backgroundColor: "white",
+  statusBox: {
+    borderWidth: 1,
+    borderColor: BLACK,
+    borderStyle: "solid",
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    alignSelf: "flex-start",
   },
-  sigRow: { flexDirection: "row", marginBottom: 8 },
+  statusTxt: { fontSize: 7, fontFamily: "Helvetica-Bold", letterSpacing: 0.3, color: BLACK },
+  statusDash: { fontSize: 8, color: BLACK },
+
+  footer: { position: "absolute", bottom: 0, left: 0, right: 0, padding: "12 28", borderTop: `1 solid ${LINE}` },
+  sigRow: { flexDirection: "row", marginBottom: 10 },
   sigBox: { flex: 1 },
-  sigLine: { borderBottom: "1 dashed #94a3b8", height: 22, marginBottom: 3 },
-  sigLabel: { fontSize: 7, fontFamily: "Helvetica-Bold", color: C.slate400 },
-  footerNote: { fontSize: 7, fontFamily: "Helvetica-Bold", color: C.slate400, textAlign: "center", marginTop: 4 },
+  sigLine: { borderBottom: `1 dashed ${LINE}`, height: 26, marginBottom: 4 },
+  sigLabel: { fontSize: 7, color: BLACK },
+  footerNote: { fontSize: 7, color: BLACK, textAlign: "center", marginTop: 6 },
 });
 
-// Meta keys that live alongside the result sections on `report` but aren't
-// sections themselves — mirrors REPORT_META_KEYS in ReportViewer.jsx so the
-// PDF hides the same fields the screen/print view hides (previously this
-// only excluded _id/name, so reportDate/sampleCollectionDate could leak
-// through as a bogus section here if ever stored as an object).
-const REPORT_META_KEYS = new Set(["_id", "name", "reportDate", "sampleCollectionDate"]);
-
-function parseRange(ref) {
-  if (!ref) return null;
-  const m = ref.match(/^([\d.]+)\s*[–\-]\s*([\d.]+)$/);
-  if (!m) return null;
-  return { min: parseFloat(m[1]), max: parseFloat(m[2]) };
+// Status is purely the tag typed on the matched tier — nothing to
+// interpret, no fallback numeric comparison, no keyword guessing.
+function getStatus(field) {
+  return field?.referenceTag || null;
 }
-
-function fmt(num) {
-  return num
-    .toFixed(3)
-    .replace(/\.?0+$/, "")
-    .replace(/^0\./, ".");
-}
-function fmtLow(num) {
-  return num.toFixed(3).replace(/\.?0+$/, "");
-}
-
-// A number field's status now comes from whichever the schema produced:
-// - referenceTag (current) — the label of the standard-range tier the value
-//   matched (e.g. "High", "Reactive", "Trace"). Status bucket comes from the
-//   label text itself; no ratio to compute since a tier isn't a single
-//   min/max span.
-// - referenceRange (legacy) — a plain "min–max" string from reports saved
-//   before the tier-based Ranges system. Falls back to the old ratio-based
-//   Higher/Lower(Nx) labeling.
-function statusFromTag(tag) {
-  const label = (tag || "").toLowerCase();
-  if (/low/.test(label)) return "low";
-  if (/high/.test(label)) return "high";
-  if (/normal|unremarkable|negative/.test(label)) return "normal";
-  return "tag";
-}
-
-function getStatusInfo(field) {
-  if (!field) return null;
-  if (field.referenceTag) {
-    return { status: statusFromTag(field.referenceTag), label: field.referenceTag };
-  }
-  const n = parseFloat(field.value);
-  if (isNaN(n) || !field.referenceRange) return null;
-  const r = parseRange(field.referenceRange);
-  if (!r) return null;
-  if (n > r.max) return { status: "high", label: `Higher (${fmt(n / r.max)}x)` };
-  if (n < r.min) {
-    if (r.min === 0) return { status: "low", label: "Low" };
-    return { status: "low", label: `Lower (${fmtLow(n / r.min)}x)` };
-  }
-  return { status: "normal", label: "Normal" };
-}
-
 function isResultField(field) {
   if (!field || typeof field !== "object") return false;
   return Boolean(field.referenceRange) || Boolean(field.referenceTag) || Boolean(field.unit);
+}
+function hasEvaluableStatus(field) {
+  return Boolean(field?.referenceTag);
 }
 
 function getSectionEntries(sectionData) {
   return Object.entries(sectionData).filter(([key]) => key !== "__showTitle");
 }
 
-const ROW_COLORS = {
-  high: { bg: "#fff8f8", val: C.high },
-  low: { bg: "#fffdf5", val: C.low },
-  normal: { bg: "white", val: C.dark },
-  tag: { bg: "#faf5ff", val: C.tag },
-};
+// Meta keys that live alongside the result sections on `report` but aren't
+// sections themselves.
+const REPORT_META_KEYS = new Set(["_id", "name", "reportDate", "sampleCollectionDate"]);
 
-const PILL_COLORS = {
-  high: { bg: C.highBg, color: C.high, border: C.highBdr },
-  low: { bg: C.lowBg, color: C.low, border: C.lowBdr },
-  normal: { bg: C.normBg, color: C.normal, border: C.normBdr },
-  tag: { bg: C.tagBg, color: C.tag, border: C.tagBdr },
-};
+// Turns a relative weight into a flexible column: flexBasis:0 + flexGrow:weight
+// shares the row's width proportionally between columns, and flexShrink:1
+// lets a column that's given too little room shrink instead of forcing its
+// Text to overflow past its edge — long values wrap onto extra lines
+// instead of getting cropped at the column boundary.
+function colFlex(weight) {
+  return { flexBasis: 0, flexGrow: weight, flexShrink: 1 };
+}
 
-function Pill({ info }) {
-  if (!info) return null;
-  const pc = PILL_COLORS[info.status];
-  if (!pc) return null;
+// field.referenceTiers is an array of GROUPS — [{ group, rows }] — where
+// `group` is null for a "simple" (ungrouped) standard range, or a label
+// like "Male" / "Female" / "18y – 60y" for gender/age scoped ranges. Not
+// every report carries this (older/simple submissions only have a single
+// referenceRange/referenceTag), so it's an optional richer view of the
+// same match, checked first when present.
+function flattenTierGroups(groups) {
+  const lines = [];
+  groups.forEach((g) => {
+    if (g.group) lines.push({ type: "header", label: g.group });
+    (g.rows || []).forEach((r) => lines.push({ type: "row", ...r }));
+  });
+  return lines;
+}
+
+// field.referenceValue (for a keyvalue-scoped text/textarea field) may come
+// through as an array of GROUPS — [{ header, pairs: [{ key, value }] }] —
+// where `header` is optional.
+function flattenKeyValueGroups(groups) {
+  const lines = [];
+  groups.forEach((g) => {
+    if (g.header) lines.push({ type: "header", label: g.header });
+    (g.pairs || []).forEach((p) => lines.push({ type: "row", key: p.key, value: p.value }));
+  });
+  return lines;
+}
+
+// Status rendered as a bordered box with bold uppercase text — no color,
+// just whatever label was typed on the matched tier.
+function StatusBoxPDF({ label }) {
+  if (!label) return <Text style={s.statusDash}>—</Text>;
   return (
-    <View style={[s.pill, { backgroundColor: pc.bg, borderWidth: 0.5, borderColor: pc.border }]}>
-      <Text style={{ color: pc.color, fontSize: 7, fontFamily: "Helvetica-Bold" }}>{info.label}</Text>
+    <View style={s.statusBox}>
+      <Text style={s.statusTxt}>{label.toUpperCase()}</Text>
     </View>
   );
 }
 
-function PDFSection({ sectionName, sectionData, showHeader }) {
+// A Key-Value Pair reference — stacked rows with a border-top divider
+// between them, no outer box of its own. The parent cell hands this
+// component the full cell area with zero padding so each row's own
+// padding + border-top stretches edge-to-edge across the cell. A header
+// band is only rendered for groups that were actually given one.
+function RefKeyValueBoxPDF({ groups }) {
+  const lines = flattenKeyValueGroups(groups);
+  return (
+    <View style={{ width: "100%" }}>
+      {lines.map((line, i) =>
+        line.type === "header" ? (
+          <View
+            key={i}
+            style={{
+              borderTop: i > 0 ? `1 solid ${LINE}` : undefined,
+              backgroundColor: HEAD_BG,
+              paddingVertical: 2,
+              paddingHorizontal: 6,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 6.5,
+                fontFamily: "Helvetica-Bold",
+                color: BLACK,
+                textAlign: "center",
+                textTransform: "uppercase",
+              }}
+            >
+              {line.label}
+            </Text>
+          </View>
+        ) : (
+          <View
+            key={i}
+            style={{
+              borderTop: i > 0 ? `1 solid ${LINE}` : undefined,
+              paddingVertical: 4,
+              paddingHorizontal: 6,
+            }}
+          >
+            <Text style={{ fontSize: 7, fontFamily: "Helvetica-Bold", color: BLACK, textAlign: "center" }}>
+              {line.key} : {line.value}
+            </Text>
+          </View>
+        ),
+      )}
+    </View>
+  );
+}
+
+// A number field's full reference table, when present. Every group
+// defined on the field's standard range is rendered, with the row the
+// patient's actual value landed in getting ABNORMAL_BG's neutral gray
+// fill, bold text, and a plain tick mark next to the tier name —
+// grayscale only, matching this report's black-ink-on-white-paper theme.
+function RefTierBoxPDF({ groups }) {
+  const lines = flattenTierGroups(groups);
+  return (
+    <View style={{ width: "100%" }}>
+      {lines.map((line, i) =>
+        line.type === "header" ? (
+          <View
+            key={i}
+            style={{
+              borderTop: i > 0 ? `1 solid ${LINE}` : undefined,
+              backgroundColor: HEAD_BG,
+              paddingVertical: 2,
+              paddingHorizontal: 6,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 6.5,
+                fontFamily: "Helvetica-Bold",
+                color: BLACK,
+                textAlign: "center",
+                textTransform: "uppercase",
+              }}
+            >
+              {line.label}
+            </Text>
+          </View>
+        ) : (
+          <View
+            key={i}
+            style={{
+              borderTop: i > 0 ? `1 solid ${LINE}` : undefined,
+              backgroundColor: line.matched ? ABNORMAL_BG : undefined,
+              flexDirection: "row",
+            }}
+          >
+            <View
+              style={{
+                flexBasis: 0,
+                flexGrow: 1,
+                flexShrink: 1,
+                borderRight: `1 solid ${LINE}`,
+                paddingVertical: 3,
+                paddingHorizontal: 6,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 4,
+              }}
+            >
+              <Text style={{ fontSize: 7, fontFamily: line.matched ? "Helvetica-Bold" : "Helvetica", color: BLACK }}>
+                {line.label}
+              </Text>
+              {line.matched && <Text style={{ fontSize: 7, fontFamily: "Helvetica-Bold", color: BLACK }}>✓</Text>}
+            </View>
+            <View
+              style={{
+                flexBasis: 0,
+                flexGrow: 1,
+                flexShrink: 1,
+                paddingVertical: 3,
+                paddingHorizontal: 6,
+              }}
+            >
+              <Text style={{ fontSize: 7, fontFamily: line.matched ? "Helvetica-Bold" : "Helvetica", color: BLACK }}>
+                {line.range}
+              </Text>
+            </View>
+          </View>
+        ),
+      )}
+    </View>
+  );
+}
+
+function PDFSection({ sectionName, sectionData, index, showHeader }) {
   const entries = getSectionEntries(sectionData);
   const resultEntries = entries.filter(([, v]) => isResultField(v));
   const plainEntries = entries.filter(([, v]) => !isResultField(v));
-  const hasResultTable = resultEntries.length > 0;
   const hasUnits = resultEntries.some(([, v]) => Boolean(v.unit));
-  // A section shows the Ref./Status columns if any result field carries
-  // either a legacy referenceRange or a current referenceTag.
-  const hasRefInfo = resultEntries.some(([, v]) => Boolean(v.referenceRange) || Boolean(v.referenceTag));
+  const hasStatus = resultEntries.some(([, v]) => hasEvaluableStatus(v));
 
-  const W = hasRefInfo
-    ? hasUnits
-      ? { param: "32%", result: "13%", unit: "10%", ref: "22%", status: "23%" }
-      : { param: "34%", result: "16%", ref: "26%", status: "24%" }
-    : hasUnits
-      ? { param: "40%", result: "30%", unit: "30%" }
-      : { param: "58%", result: "42%" };
+  const W = hasUnits
+    ? hasStatus
+      ? { param: 30, result: 14, unit: 12, ref: 24, status: 20 }
+      : { param: 34, result: 18, unit: 14, ref: 34 }
+    : hasStatus
+      ? { param: 34, result: 18, ref: 28, status: 20 }
+      : { param: 38, result: 22, ref: 40 };
 
   return (
-    <View style={s.sectionWrap}>
+    <View style={s.sectionWrap} wrap={false}>
       {showHeader && (
         <View style={s.sectionHead}>
+          <View style={s.sectionBadge}>
+            <Text style={s.sectionBadgeTxt}>{String.fromCharCode(65 + index)}</Text>
+          </View>
           <Text style={s.sectionName}>{sectionName}</Text>
-          <Text style={s.sectionCount}>
-            {entries.length} parameter{entries.length !== 1 ? "s" : ""}
-          </Text>
         </View>
       )}
 
-      {/* When the section has at least one result-style field, ALL fields —
-          including radio/select/checkbox/textarea/plain-text ones — render
-          as rows in this same table, with "—" filling the Unit/Ref-Range/
-          Status columns for non-result fields. Only when no field is
-          result-style does the section fall back to the plain two-column
-          layout below. */}
-      {hasResultTable && (
+      {resultEntries.length > 0 && (
         <View>
           <View style={s.tableHead}>
-            <Text style={[s.th, { width: W.param }]}>Parameter</Text>
-            <Text style={[s.th, { width: W.result }]}>Result</Text>
-            {hasUnits && <Text style={[s.th, { width: W.unit }]}>Unit</Text>}
-            {hasRefInfo && (
-              <>
-                <Text style={[s.th, { width: W.ref }]}>Ref. Range</Text>
-                <Text style={[s.th, { width: W.status }]}>Status</Text>
-              </>
-            )}
+            <Text style={[s.th, colFlex(W.param)]}>Parameter</Text>
+            <Text style={[s.th, colFlex(W.result)]}>Result</Text>
+            {hasUnits && <Text style={[s.th, colFlex(W.unit)]}>Unit</Text>}
+            <Text style={[hasStatus ? s.th : s.thLast, colFlex(W.ref)]}>Reference Range</Text>
+            {hasStatus && <Text style={[s.thLast, colFlex(W.status)]}>Status</Text>}
           </View>
-          {entries.map(([name, field]) => {
-            if (isResultField(field)) {
-              const value = String(field.value ?? "");
-              // referenceRange holds the matched tier's own bounds (e.g.
-              // "70–100", "> 10"); referenceTag holds its label (e.g.
-              // "High") — Ref. Range and Status show each separately.
-              const ref = field.referenceRange || "";
-              const info = hasRefInfo ? getStatusInfo(field) : null;
-              const rc = info ? (ROW_COLORS[info.status] ?? {}) : {};
-              return (
-                <View key={name} style={[s.tableRow, { backgroundColor: rc.bg ?? "white" }]}>
-                  <Text style={[s.td, { width: W.param }]}>{name}</Text>
-                  <Text style={[s.tdBold, { width: W.result, color: rc.val ?? C.dark }]}>{value}</Text>
-                  {hasUnits && <Text style={[s.tdUnit, { width: W.unit }]}>{field.unit || "—"}</Text>}
-                  {hasRefInfo && (
-                    <>
-                      <Text style={[s.tdMono, { width: W.ref }]}>{ref || "—"}</Text>
-                      <View style={{ width: W.status, justifyContent: "center", paddingHorizontal: 6 }}>
-                        <Pill info={info} />
-                      </View>
-                    </>
-                  )}
-                </View>
-              );
-            }
-            const val = Array.isArray(field.value) ? field.value.join(", ") : String(field.value ?? "—");
+          {resultEntries.map(([name, field], i) => {
+            const value = String(field.value ?? "");
+            const unit = field.unit || "";
+            const tierGroups =
+              Array.isArray(field.referenceTiers) && field.referenceTiers.length ? field.referenceTiers : null;
+            const ref = tierGroups ? null : field.referenceRange || field.referenceValue || "";
+            const refIsKV = !tierGroups && Array.isArray(ref);
+            const status = getStatus(field);
             return (
-              <View key={name} style={[s.tableRow, { backgroundColor: "white" }]}>
-                <Text style={[s.td, { width: W.param }]}>{name}</Text>
-                <Text style={[s.tdBold, { width: W.result }]}>{val || "—"}</Text>
-                {hasUnits && <Text style={[s.tdUnit, { width: W.unit }]}>—</Text>}
-                {hasRefInfo && (
-                  <>
-                    <Text style={[s.tdMono, { width: W.ref }]}>—</Text>
-                    <View style={{ width: W.status, justifyContent: "center", paddingHorizontal: 6 }} />
-                  </>
+              <View key={name} style={[s.tableRow, i % 2 === 1 && s.tableRowAlt]} wrap={false}>
+                <Text style={[s.td, colFlex(W.param)]}>{name}</Text>
+                <Text style={[s.td, s.tdBold, colFlex(W.result)]}>{value || "—"}</Text>
+                {hasUnits && <Text style={[s.td, s.tdMuted, colFlex(W.unit)]}>{unit || "—"}</Text>}
+                {tierGroups ? (
+                  <View style={[hasStatus ? s.td : s.tdLast, colFlex(W.ref), { padding: 0 }]}>
+                    <RefTierBoxPDF groups={tierGroups} />
+                  </View>
+                ) : refIsKV ? (
+                  <View style={[hasStatus ? s.td : s.tdLast, colFlex(W.ref), { padding: 0 }]}>
+                    <RefKeyValueBoxPDF groups={ref} />
+                  </View>
+                ) : (
+                  <Text style={[hasStatus ? s.td : s.tdLast, s.tdMuted, colFlex(W.ref)]}>{ref || "—"}</Text>
+                )}
+                {hasStatus && (
+                  <View style={[s.tdLast, colFlex(W.status)]}>
+                    <StatusBoxPDF label={status} />
+                  </View>
                 )}
               </View>
             );
@@ -343,14 +395,26 @@ function PDFSection({ sectionName, sectionData, showHeader }) {
         </View>
       )}
 
-      {!hasResultTable && plainEntries.length > 0 && (
-        <View>
-          {plainEntries.map(([name, field]) => {
+      {plainEntries.length > 0 && (
+        <View style={resultEntries.length > 0 ? { borderTop: `1 solid ${LINE}` } : undefined}>
+          {plainEntries.map(([name, field], i) => {
             const val = Array.isArray(field.value) ? field.value.join(", ") : String(field.value ?? "—");
+            const isKV = Array.isArray(field.referenceValue);
             return (
-              <View key={name} style={[s.tableRow, { backgroundColor: "white" }]}>
-                <Text style={[s.td, { width: "38%", color: C.slate400 }]}>{name}</Text>
-                <Text style={[s.tdBold, { flex: 1 }]}>{val || "—"}</Text>
+              <View key={name} style={[s.tableRow, i % 2 === 1 && s.tableRowAlt]} wrap={false}>
+                <Text style={[s.td, colFlex(32)]}>{name}</Text>
+                {isKV ? (
+                  <View style={{ flex: 1, flexDirection: "row", alignItems: "center" }}>
+                    <Text style={[s.tdBold, { fontSize: 9, color: BLACK, padding: "5 8" }]}>{val || "—"}</Text>
+                    <View style={{ flex: 1 }}>
+                      <RefKeyValueBoxPDF groups={field.referenceValue} />
+                    </View>
+                  </View>
+                ) : (
+                  <View style={{ flex: 1, flexDirection: "row", alignItems: "center", padding: "5 8" }}>
+                    <Text style={[s.tdBold, { fontSize: 9, color: BLACK }]}>{val || "—"}</Text>
+                  </View>
+                )}
               </View>
             );
           })}
@@ -360,42 +424,18 @@ function PDFSection({ sectionName, sectionData, showHeader }) {
   );
 }
 
-export function ReportPDFDocument({
-  report,
-  reportName,
-  shortId,
-  patient,
-  labInfo,
-  isIndoor = false,
-  staticStandardRange = null,
-  isPad = false,
-}) {
+export function ReportPDFDocument({ report, reportName, shortId, patient, labInfo, isIndoor = false, isPad = false }) {
   const sections = Object.entries(report).filter(
     ([key, val]) =>
       !REPORT_META_KEYS.has(key) && val !== null && typeof val === "object" && !Array.isArray(val) && !val.$oid,
   );
 
-  let normal = 0,
-    low = 0,
-    high = 0;
-  sections.forEach(([, sec]) => {
-    getSectionEntries(sec).forEach(([, field]) => {
-      if (!isResultField(field)) return;
-      const info = getStatusInfo(field);
-      if (!info) return;
-      if (info.status === "normal") normal++;
-      else if (info.status === "low") low++;
-      else if (info.status === "high") high++;
-    });
-  });
-  const total = normal + low + high;
-
   const mainFields = [
     { label: "Patient Name", value: patient.name },
     { label: "Age / Gender", value: [patient.age, patient.gender].filter(Boolean).join(" · ") },
     { label: "Contact", value: patient.contact },
-    ...(patient.sampleDate ? [{ label: "Sample Date", value: patient.sampleDate }] : []),
-    ...(patient.reportDate ? [{ label: "Report Date", value: patient.reportDate }] : []),
+    { label: "Sample Date", value: patient.sampleDate },
+    { label: "Report Date", value: patient.reportDate },
   ];
 
   // Pad mode: leave the physical pre-printed letterhead area blank by
@@ -410,87 +450,54 @@ export function ReportPDFDocument({
         {isPad ? (
           <View style={{ height: `${padHeightMm}mm` }} />
         ) : (
-          <View style={s.header}>
+          <View style={s.letterhead}>
             <View>
               <Text style={s.labName}>{labInfo.name}</Text>
-              {labInfo.tagline ? <Text style={s.labSub}>{labInfo.tagline}</Text> : null}
+              {labInfo.tagline ? <Text style={s.labTagline}>{labInfo.tagline}</Text> : null}
               <Text style={s.labAddr}>{labInfo.address}</Text>
             </View>
             <View style={s.headerRight}>
-              <Text style={s.headerContact}>{labInfo.phone}</Text>
-              {labInfo.email ? <Text style={s.headerContact}>{labInfo.email}</Text> : null}
-              {labInfo.regNo ? <Text style={s.headerReg}>Reg: {labInfo.regNo}</Text> : null}
+              <Text style={s.headerLine}>Tel: {labInfo.phone}</Text>
+              {labInfo.email ? <Text style={s.headerLine}>{labInfo.email}</Text> : null}
+              {labInfo.regNo ? <Text style={s.headerLine}>Reg. No: {labInfo.regNo}</Text> : null}
             </View>
           </View>
         )}
 
-        {/* Title bar */}
         <View style={s.titleBar}>
           <Text style={s.titleText}>{reportName}</Text>
           {shortId ? (
             <Text style={s.invoiceText}>
-              {isIndoor ? "Admission" : "Invoice"}: {shortId}
+              {isIndoor ? "Admission No" : "Invoice No"}: {shortId}
             </Text>
           ) : null}
         </View>
 
-        {/* Patient grid */}
-        <View style={s.patientRow}>
-          {mainFields.map(({ label, value }) => (
-            <View key={label} style={s.patientCell}>
-              <Text style={s.cellLabel}>{label}</Text>
-              <Text style={s.cellValue}>{value || "—"}</Text>
-            </View>
-          ))}
-        </View>
-        <View style={s.referredRow}>
-          <Text style={[s.cellLabel, { marginBottom: 0 }]}>Referred By</Text>
-          <Text style={[s.cellValue, { fontSize: 9 }]}>{patient.referredBy || "—"}</Text>
-        </View>
-
-        {/* Summary */}
-        {total > 0 && (
-          <View style={s.summaryBar}>
-            <Text style={{ fontSize: 8, color: C.slate600, fontFamily: "Helvetica-Bold" }}>{total} parameters:</Text>
-            <Text style={{ fontSize: 8, fontFamily: "Helvetica-Bold", color: C.normal }}>{normal} Normal</Text>
-            {low > 0 && <Text style={{ fontSize: 8, fontFamily: "Helvetica-Bold", color: C.low }}>{low} Low</Text>}
-            {high > 0 && <Text style={{ fontSize: 8, fontFamily: "Helvetica-Bold", color: C.high }}>{high} High</Text>}
-          </View>
-        )}
-
-        {/* Sections (+ optional static standard-range sidebar) */}
-        <View
-          style={{
-            padding: "10 14",
-            flexDirection: staticStandardRange ? "row" : "column",
-            gap: staticStandardRange ? 10 : 0,
-          }}
-        >
-          <View style={{ flex: staticStandardRange ? 3 : 1 }}>
-            {sections.map(([sectionName, sectionData]) => (
-              <PDFSection
-                key={sectionName}
-                sectionName={sectionName}
-                sectionData={sectionData}
-                showHeader={sectionData.__showTitle !== false}
-              />
+        <View style={s.patientTable}>
+          <View style={s.patientRow}>
+            {mainFields.map(({ label, value }, i) => (
+              <View key={label} style={i === mainFields.length - 1 ? s.patientCellLast : s.patientCell}>
+                <Text style={s.cellLabel}>{label}</Text>
+                <Text style={s.cellValue}>{value || "—"}</Text>
+              </View>
             ))}
           </View>
-
-          {staticStandardRange && (
-            <View style={[s.rangeBoxWrap, { flex: 1 }]}>
-              <View style={s.rangeBoxHead}>
-                <Text style={s.rangeBoxHeadText}>Standard Reference</Text>
-              </View>
-              <View style={s.rangeBox}>
-                <Text style={s.rangeBoxText}>{staticStandardRange}</Text>
-              </View>
-            </View>
-          )}
+          <View style={s.referredRow}>
+            <Text style={[s.cellLabel, { marginBottom: 0 }]}>Referred By</Text>
+            <Text style={[s.cellValue, { fontSize: 9 }]}>{patient.referredBy || "—"}</Text>
+          </View>
         </View>
 
-        {/* Footer — omitted in Pad mode, matching footerBlock in
-            ReportViewer.jsx's buildPrintHTML (isPad ? "" : footerBlock) */}
+        {sections.map(([sectionName, sectionData], i) => (
+          <PDFSection
+            key={sectionName}
+            sectionName={sectionName}
+            sectionData={sectionData}
+            index={i}
+            showHeader={sectionData.__showTitle !== false}
+          />
+        ))}
+
         {!isPad && (
           <View style={s.footer} fixed>
             <View style={s.sigRow}>

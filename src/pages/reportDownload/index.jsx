@@ -121,7 +121,6 @@ export default function ReportDownload() {
   const [report, setReport] = useState(null);
   const [patient, setPatient] = useState(null);
   const [displayId, setDisplayId] = useState(null);
-  const [staticStandardRange, setStaticStandardRange] = useState(null);
   const [loading, setLoading] = useState(true);
   const [popup, setPopup] = useState(null);
   const [offlinePopup, setOfflinePopup] = useState(false);
@@ -154,20 +153,6 @@ export default function ReportDownload() {
           sampleDate: formatDate(data.report?.sampleCollectionDate),
           reportDate: formatDate(data.report?.reportDate),
         });
-
-        // Static standard range lives on the schema (shared reference data),
-        // not on the report itself — fetch it separately and never let a
-        // failure here block the report from displaying.
-        if (data.schemaId) {
-          reportService
-            .getTestSchema(data.schemaId)
-            .then(({ data: schema }) => {
-              if (schema?.hasStaticStandardRange && schema?.staticStandardRange) {
-                setStaticStandardRange(schema.staticStandardRange);
-              }
-            })
-            .catch((e) => console.error("Failed to load schema standard range:", e));
-        }
       })
       .catch((err) => {
         if (isNetworkError(err)) {
@@ -305,7 +290,6 @@ export default function ReportDownload() {
                 printType={printType}
                 invoiceId={displayId}
                 isIndoor={isIndoor}
-                staticStandardRange={staticStandardRange}
                 {...(labInfo && { labInfo })}
               />
             </div>

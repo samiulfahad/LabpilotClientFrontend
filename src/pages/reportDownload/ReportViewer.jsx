@@ -9,23 +9,17 @@ import {
   Calendar,
   Stethoscope,
   Hash,
-  ClipboardList,
-  TrendingDown,
-  TrendingUp,
   Share2,
   Printer,
   Download,
   ChevronDown,
   Check,
-  CheckCircle2,
   FileText,
   Loader2,
-  Tag,
 } from "lucide-react";
 import { ReportPDFDocument } from "./ReportPDF";
 
-// Fallback pad height (mm) used when a lab hasn't set medicalReport.padHeight
-// — roughly matches the old hardcoded 1.5in spacer.
+// Fallback pad height (mm) used when a lab hasn't set medicalReport.padHeight.
 const DEFAULT_PAD_HEIGHT_MM = 38;
 
 const LAB_INFO = {
@@ -50,590 +44,498 @@ const EMPTY_PATIENT = {
 
 const REPORT_META_KEYS = new Set(["_id", "name", "reportDate", "sampleCollectionDate"]);
 
-function parseRange(ref) {
-  if (!ref) return null;
-  const m = ref.match(/^([\d.]+)\s*[–\-]\s*([\d.]+)$/);
-  if (!m) return null;
-  return { min: parseFloat(m[1]), max: parseFloat(m[2]) };
-}
-
-function fmt(num) {
-  return num
-    .toFixed(3)
-    .replace(/\.?0+$/, "")
-    .replace(/^0\./, ".");
-}
-function fmtLow(num) {
-  return num.toFixed(3).replace(/\.?0+$/, "");
-}
-
-// A number field's status comes from whichever the schema produced:
-// - referenceTag (current) — the label of the standard-range tier the value
-//   matched (e.g. "High", "Reactive", "Trace"). The status bucket comes
-//   from the label text itself; there's no ratio to compute since a tier
-//   isn't a single min/max span.
-// - referenceRange (legacy) — a plain "min–max" string from reports saved
-//   before the tier-based Ranges system. Falls back to the old ratio-based
-//   Higher/Lower(Nx) labeling.
-function statusFromTag(tag) {
-  const label = (tag || "").toLowerCase();
-  if (/low/.test(label)) return "low";
-  if (/high/.test(label)) return "high";
-  if (/normal|unremarkable|negative/.test(label)) return "normal";
-  return "tag";
-}
-
-function getStatusInfo(field) {
-  if (!field) return null;
-  if (field.referenceTag) {
-    return { status: statusFromTag(field.referenceTag), label: field.referenceTag };
-  }
-  const n = parseFloat(field.value);
-  if (isNaN(n) || !field.referenceRange) return null;
-  const r = parseRange(field.referenceRange);
-  if (!r) return null;
-  if (n > r.max) return { status: "high", label: `Higher (${fmt(n / r.max)}x)` };
-  if (n < r.min) {
-    if (r.min === 0) return { status: "low", label: "Low" };
-    return { status: "low", label: `Lower (${fmtLow(n / r.min)}x)` };
-  }
-  return { status: "normal", label: "Normal" };
-}
-
+// Status is purely presentational: if a field carries a referenceTag (the
+// matched tier's manually-typed label), that label is printed as-is with no
+// low/high/normal guessing, no arrows, and no abnormal-row shading. Fields
+// with no referenceTag simply show no status. Mirrors the admin renderer.
 function getStatus(field) {
-  const info = getStatusInfo(field);
-  return info ? info.status : null;
+  if (!field) return null;
+  if (field.referenceTag) return "tag";
+  return null;
 }
 
-function isResultField(field) {
-  if (!field || typeof field !== "object") return false;
-  return Boolean(field.referenceRange) || Boolean(field.referenceTag) || Boolean(field.unit);
+function hasEvaluableStatus(field) {
+  return Boolean(field?.referenceRange) || Boolean(field?.referenceTag);
 }
 
 function getSectionEntries(sectionData) {
   return Object.entries(sectionData).filter(([key]) => key !== "__showTitle");
 }
 
-// Escapes free-text (staticStandardRange is admin-entered prose) before it's
-// interpolated into the raw HTML string used for the print path.
-function escapeHtml(str) {
-  return String(str).replace(
-    /[&<>"']/g,
-    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
+// referenceRange (the matched tier's own bounds, e.g. "70–100", "> 10") is
+// checked before referenceTag (its label, e.g. "High") so this only ever
+// falls back to showing the tag text here if a field genuinely has no
+// stored range. A Key-Value Pair reference comes through as an array of
+// { key, value } objects rather than a string — callers must check for
+// that and render a stacked list instead. NOTE: when a number field
+// carries the full referenceTiers array (see RefTierBox below), callers
+// should check for that FIRST and skip this helper entirely.
+function getRefDisplay(field) {
+  return field.referenceRange || field.referenceTag || field.referenceValue || "";
+}
+
+// field.referenceValue (for a keyvalue-scoped text/textarea field) may come
+// through as an array of GROUPS — [{ header, pairs: [{ key, value }] }] —
+// where `header` is optional. This flattens that into an ordered list of
+// header/row lines so an ungrouped (header-less) group just contributes
+// its bare rows.
+function flattenKeyValueGroups(groups) {
+  const lines = [];
+  groups.forEach((g) => {
+    if (g.header) lines.push({ type: "header", label: g.header });
+    (g.pairs || []).forEach((p) => lines.push({ type: "row", key: p.key, value: p.value }));
+  });
+  return lines;
+}
+
+// On-screen rendering of a Key-Value Pair reference. The parent <td> hands
+// this component the full cell with zero padding so each row's own
+// padding + border-top divider stretches edge-to-edge across the cell —
+// reading as real stacked boxed rows, not a thin line floating inside
+// leftover cell padding. A header band is only rendered for groups that
+// were actually given one.
+function RefKeyValueBox({ groups }) {
+  const lines = flattenKeyValueGroups(groups);
+  return (
+    <div className="w-full">
+      {lines.map((line, i) =>
+        line.type === "header" ? (
+          <div
+            key={i}
+            className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-black text-center bg-gray-100 ${
+              i > 0 ? "border-t border-black" : ""
+            }`}
+          >
+            {line.label}
+          </div>
+        ) : (
+          <div
+            key={i}
+            className={`px-3 py-2 text-[11px] font-bold text-black text-center leading-snug ${
+              i > 0 ? "border-t border-black" : ""
+            }`}
+          >
+            {line.key} : {line.value}
+          </div>
+        ),
+      )}
+    </div>
   );
 }
 
-function StatusPill({ field }) {
-  const info = getStatusInfo(field);
-  if (!info) return <span className="text-xs text-black">—</span>;
-  const cfg = {
-    normal: { cls: "bg-emerald-50 text-emerald-700 border-emerald-200", Icon: CheckCircle2 },
-    low: { cls: "bg-amber-50 text-amber-700 border-amber-200", Icon: TrendingDown },
-    high: { cls: "bg-red-50 text-red-700 border-red-200", Icon: TrendingUp },
-    tag: { cls: "bg-violet-50 text-violet-700 border-violet-200", Icon: Tag },
-  }[info.status];
-  if (!cfg) return <span className="text-xs text-black">—</span>;
+// field.referenceTiers is an array of GROUPS — [{ group, rows }] — where
+// `group` is null for a "simple" (ungrouped) standard range, or a label
+// like "Male" / "Female" / "18y – 60y" for gender/age scoped ranges. Not
+// every report will have this (older/simple submissions only carry a
+// single referenceRange/referenceTag), so it's treated as an optional,
+// richer view of the same match when present.
+function flattenTierGroups(groups) {
+  const lines = [];
+  groups.forEach((g) => {
+    if (g.group) lines.push({ type: "header", label: g.group });
+    (g.rows || []).forEach((r) => lines.push({ type: "row", ...r }));
+  });
+  return lines;
+}
+
+// On-screen rendering of a number field's full reference table, when
+// present. Every group defined on the field's standard range is shown,
+// with the row the patient's actual value landed in getting a neutral
+// gray fill, bold text, and a plain tick mark next to the tier name.
+function RefTierBox({ groups }) {
+  const lines = flattenTierGroups(groups);
   return (
-    <span
-      className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 border whitespace-nowrap ${cfg.cls}`}
-    >
-      <cfg.Icon className="w-2.5 h-2.5 flex-shrink-0" />
-      {info.label}
+    <div className="w-full">
+      {lines.map((line, i) =>
+        line.type === "header" ? (
+          <div
+            key={i}
+            className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-black text-center bg-gray-100 ${
+              i > 0 ? "border-t border-black" : ""
+            }`}
+          >
+            {line.label}
+          </div>
+        ) : (
+          <div
+            key={i}
+            className={`grid grid-cols-2 text-[11px] leading-snug ${i > 0 ? "border-t border-black" : ""} ${
+              line.matched ? "bg-gray-200" : ""
+            }`}
+          >
+            <span
+              className={`px-3 py-1 border-r border-black text-black flex items-center justify-between gap-1 ${
+                line.matched ? "font-bold" : ""
+              }`}
+            >
+              {line.label}
+              {line.matched && <Check className="w-3 h-3 flex-shrink-0" />}
+            </span>
+            <span className={`px-3 py-1 text-black ${line.matched ? "font-bold" : ""}`}>{line.range}</span>
+          </div>
+        ),
+      )}
+    </div>
+  );
+}
+
+// Print-HTML string equivalent of RefKeyValueBox.
+function refKeyValueRowsHtml(groups) {
+  const lines = flattenKeyValueGroups(groups);
+  return lines
+    .map((line, i) => {
+      const borderTop = i > 0 ? "border-top:1px solid #000;" : "";
+      if (line.type === "header") {
+        return `<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:#000;text-align:center;padding:4px 12px;background:#f3f4f6;${borderTop}">${line.label}</div>`;
+      }
+      return `<div style="font-size:10px;font-weight:700;color:#000;text-align:center;padding:6px 12px;${borderTop}">${line.key} : ${line.value}</div>`;
+    })
+    .join("");
+}
+
+// Print-HTML string equivalent of RefTierBox.
+function refTierRowsHtml(groups) {
+  const lines = flattenTierGroups(groups);
+  return lines
+    .map((line, i) => {
+      const borderTop = i > 0 ? "border-top:1px solid #000;" : "";
+      if (line.type === "header") {
+        return `<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:#000;text-align:center;padding:4px 12px;background:#f3f4f6;${borderTop}">${line.label}</div>`;
+      }
+      return `<div style="display:grid;grid-template-columns:1fr 1fr;font-size:10px;color:#000;${borderTop}${
+        line.matched ? "background:#e6e6e6;font-weight:700;" : ""
+      }">
+        <div style="padding:4px 12px;border-right:1px solid #000;display:flex;align-items:center;justify-content:space-between;gap:6px;">
+          <span>${line.label}</span>
+          ${line.matched ? `<span style="font-size:10px;">✓</span>` : ""}
+        </div>
+        <div style="padding:4px 12px;">${line.range}</div>
+      </div>`;
+    })
+    .join("");
+}
+
+function formatValue(field) {
+  return Array.isArray(field.value) ? field.value.join(", ") : String(field.value ?? "");
+}
+
+// A bordered black-on-white box with bold uppercase text. Status is now
+// always the "tag" case (or nothing) — this just prints whatever label
+// was typed for the matched tier.
+function StatusBox({ status, label }) {
+  if (!status) return <span className="text-xs text-gray-300">—</span>;
+  const TEXT = label || "—";
+  return (
+    <span className="inline-block text-[10px] font-bold uppercase tracking-wide text-black border border-black px-2 py-0.5">
+      {TEXT}
     </span>
   );
 }
 
-const ROW_STYLE = {
-  high: { row: "bg-red-50/40", value: "text-red-700" },
-  low: { row: "bg-amber-50/40", value: "text-amber-800" },
-  normal: { row: "", value: "text-black" },
-  tag: { row: "bg-violet-50/40", value: "text-violet-700" },
-};
-
-function ResultRow({ name, field, hasUnits, hasRefInfo }) {
-  const value = String(field.value ?? "");
+function ParamRow({ name, field, hasUnits, hasStatus, isAlt }) {
+  const value = formatValue(field);
   const unit = field.unit || "";
-  // referenceRange holds the matched tier's own bounds (e.g. "70–100",
-  // "> 10"); referenceTag holds its label (e.g. "High") — Ref. Range and
-  // Status show each separately.
-  const ref = field.referenceRange || "";
-  const info = hasRefInfo ? getStatusInfo(field) : null;
-  const style = info ? (ROW_STYLE[info.status] ?? {}) : {};
+  const tierGroups = Array.isArray(field.referenceTiers) && field.referenceTiers.length ? field.referenceTiers : null;
+  const ref = tierGroups ? null : getRefDisplay(field);
+  const status = hasEvaluableStatus(field) ? getStatus(field) : null;
   return (
-    <tr className={style.row ?? ""}>
-      <td className="pl-4 pr-3 py-2.5 text-sm font-semibold text-black border-b border-slate-100">{name}</td>
+    <tr className={isAlt ? "bg-gray-50" : "bg-white"}>
+      <td className="pl-4 pr-3 py-2.5 text-sm text-black border-b border-r border-black">{name}</td>
+      <td className="px-3 py-2.5 text-sm font-bold text-black border-b border-r border-black tabular-nums">
+        {value || <span className="text-gray-300 font-normal">—</span>}
+      </td>
+      {hasUnits && (
+        <td className="px-3 py-2.5 text-[11px] font-semibold text-black border-b border-r border-black">
+          {unit || <span className="text-gray-300">—</span>}
+        </td>
+      )}
       <td
-        className={`px-3 py-2.5 text-sm font-bold tabular-nums border-b border-slate-100 ${style.value ?? "text-black"}`}
+        className={`text-xs text-black border-b border-black tabular-nums align-top ${hasStatus ? "border-r" : ""} ${
+          tierGroups || Array.isArray(ref) ? "p-0" : "px-3 py-2.5"
+        }`}
       >
-        {value}
+        {tierGroups ? (
+          <RefTierBox groups={tierGroups} />
+        ) : Array.isArray(ref) ? (
+          <RefKeyValueBox groups={ref} />
+        ) : (
+          ref || <span className="text-gray-300">—</span>
+        )}
       </td>
-      {hasUnits && (
-        <td className="px-3 py-2.5 text-[10px] font-bold text-black border-b border-slate-100">
-          {unit || <span className="text-black">—</span>}
+      {hasStatus && (
+        <td className="px-3 pr-4 py-2.5 border-b border-black">
+          <StatusBox status={status} label={field.referenceTag} />
         </td>
       )}
-      {hasRefInfo && (
-        <>
-          <td className="px-3 py-2.5 text-xs font-semibold text-black border-b border-slate-100 tabular-nums font-mono">
-            {ref || <span className="text-black">—</span>}
-          </td>
-          <td className="px-3 pr-4 py-2.5 border-b border-slate-100">
-            <StatusPill field={field} />
-          </td>
-        </>
-      )}
     </tr>
   );
 }
 
-// Row for a non-result field type (radio/select/checkbox/textarea/input)
-// rendered inside a section's Parameter/Result/Unit/Ref-Range/Status table
-// (i.e. the section also has at least one result-style field). The field's
-// value goes in the Result column; Unit/Ref-Range/Status are dashed out
-// since those concepts don't apply to this field type.
-function PlainValueRow({ name, field, hasUnits, hasRefInfo }) {
-  const val = Array.isArray(field.value) ? field.value.join(", ") : String(field.value ?? "");
-  return (
-    <tr>
-      <td className="pl-4 pr-3 py-2.5 text-sm font-semibold text-black border-b border-slate-100">{name}</td>
-      <td className="px-3 py-2.5 text-sm font-bold text-black border-b border-slate-100">
-        {val || <span className="text-black">—</span>}
-      </td>
-      {hasUnits && (
-        <td className="px-3 py-2.5 text-[10px] font-bold text-black border-b border-slate-100">
-          <span className="text-black">—</span>
-        </td>
-      )}
-      {hasRefInfo && (
-        <>
-          <td className="px-3 py-2.5 text-xs font-semibold text-black border-b border-slate-100 tabular-nums font-mono">
-            <span className="text-black">—</span>
-          </td>
-          <td className="px-3 pr-4 py-2.5 border-b border-slate-100">
-            <span className="text-xs text-black">—</span>
-          </td>
-        </>
-      )}
-    </tr>
-  );
-}
-
-function PlainRow({ name, field, colSpan }) {
-  const val = Array.isArray(field.value) ? field.value.join(", ") : String(field.value ?? "—");
-  return (
-    <tr className="odd:bg-white even:bg-slate-50/50">
-      <td className="pl-4 pr-3 py-2.5 text-sm font-semibold text-black border-b border-slate-100">{name}</td>
-      <td className="px-3 pr-4 py-2.5 text-sm font-bold text-black border-b border-slate-100" colSpan={colSpan}>
-        {val || "—"}
-      </td>
-    </tr>
-  );
-}
-
-function Section({ sectionName, sectionData, showHeader }) {
+function Section({ sectionName, sectionData, index, showHeader }) {
   const [collapsed, setCollapsed] = useState(false);
   const entries = getSectionEntries(sectionData);
-  const resultEntries = entries.filter(([, v]) => isResultField(v));
-  const plainEntries = entries.filter(([, v]) => !isResultField(v));
-  const hasResultTable = resultEntries.length > 0;
-  const hasUnits = resultEntries.some(([, v]) => Boolean(v.unit));
-  // A section shows the Ref./Status columns if any result field carries
-  // either a legacy referenceRange or a current referenceTag.
-  const hasRefInfo = resultEntries.some(([, v]) => Boolean(v.referenceRange) || Boolean(v.referenceTag));
+  const hasUnits = entries.some(([, v]) => Boolean(v.unit));
+  const hasStatus = entries.some(([, v]) => hasEvaluableStatus(v));
 
-  const paramW = hasRefInfo ? "w-[34%]" : hasUnits ? "w-[45%]" : "w-[60%]";
-  const resultW = hasRefInfo ? "w-[16%]" : hasUnits ? "w-[25%]" : "w-[40%]";
-  const unitW = hasRefInfo ? "w-[12%]" : "w-[30%]";
-  const colSpan = 1 + (hasUnits ? 1 : 0) + (hasRefInfo ? 2 : 0);
-
-  // When the section has at least one result-style field (a number field
-  // with a unit/reference range/tag), every field in the section —
-  // including radio/select/checkbox/textarea/plain-text ones — renders as a
-  // row in that same Parameter/Result/Unit/Ref-Range/Status table, with "—"
-  // filled into the columns a non-result field doesn't have. Only when no
-  // field in the section is result-style does the section fall back to the
-  // plain two-column table.
-  const tableBody = hasResultTable ? (
+  const tableBody = (
     <table className="w-full border-collapse">
       <thead>
-        <tr className="bg-slate-50 border-b border-slate-200">
-          <th
-            className={`pl-4 pr-3 py-2 text-left text-[10px] font-bold text-black uppercase tracking-wider ${paramW}`}
-          >
+        <tr className="bg-gray-100 border-b border-black">
+          <th className="pl-4 pr-3 py-1.5 text-left text-[10px] font-bold text-black uppercase tracking-wider border-r border-black w-[34%]">
             Parameter
           </th>
-          <th className={`px-3 py-2 text-left text-[10px] font-bold text-black uppercase tracking-wider ${resultW}`}>
+          <th className="px-3 py-1.5 text-left text-[10px] font-bold text-black uppercase tracking-wider border-r border-black w-[16%]">
             Result
           </th>
           {hasUnits && (
-            <th className={`px-3 py-2 text-left text-[10px] font-bold text-black uppercase tracking-wider ${unitW}`}>
+            <th className="px-3 py-1.5 text-left text-[10px] font-bold text-black uppercase tracking-wider border-r border-black w-[12%]">
               Unit
             </th>
           )}
-          {hasRefInfo && (
-            <>
-              <th className="px-3 py-2 text-left text-[10px] font-bold text-black uppercase tracking-wider w-[24%]">
-                Ref. Range
-              </th>
-              <th className="px-3 pr-4 py-2 text-left text-[10px] font-bold text-black uppercase tracking-wider w-[18%]">
-                Status
-              </th>
-            </>
+          <th
+            className={`px-3 py-1.5 text-left text-[10px] font-bold text-black uppercase tracking-wider w-[24%] ${
+              hasStatus ? "border-r border-black" : ""
+            }`}
+          >
+            Ref. Range
+          </th>
+          {hasStatus && (
+            <th className="px-3 pr-4 py-1.5 text-left text-[10px] font-bold text-black uppercase tracking-wider w-[18%]">
+              Status
+            </th>
           )}
         </tr>
       </thead>
       <tbody>
-        {entries.map(([n, f]) =>
-          isResultField(f) ? (
-            <ResultRow key={n} name={n} field={f} hasUnits={hasUnits} hasRefInfo={hasRefInfo} />
-          ) : (
-            <PlainValueRow key={n} name={n} field={f} hasUnits={hasUnits} hasRefInfo={hasRefInfo} />
-          ),
-        )}
+        {entries.map(([n, f], i) => (
+          <ParamRow key={n} name={n} field={f} hasUnits={hasUnits} hasStatus={hasStatus} isAlt={i % 2 === 1} />
+        ))}
       </tbody>
     </table>
-  ) : (
-    plainEntries.length > 0 && (
-      <table className="w-full border-collapse">
-        <tbody>
-          {plainEntries.map(([n, f]) => (
-            <PlainRow key={n} name={n} field={f} colSpan={colSpan} />
-          ))}
-        </tbody>
-      </table>
-    )
   );
 
-  if (!showHeader) {
-    return <div className="overflow-hidden border border-slate-200 mb-2">{tableBody}</div>;
-  }
+  if (!showHeader) return <div className="border border-black mb-2.5">{tableBody}</div>;
 
   return (
-    <div className="overflow-hidden border border-slate-200 mb-2">
+    <div className="border border-black mb-2.5">
       <button
         type="button"
         onClick={() => setCollapsed(!collapsed)}
-        className="w-full flex items-center justify-between px-4 py-2.5 text-left bg-slate-700 hover:bg-slate-600 transition-colors"
+        className="w-full flex items-center gap-2.5 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 border-b border-black transition-colors text-left"
       >
-        <span className="text-sm font-semibold text-white tracking-wide">{sectionName}</span>
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] text-slate-300 font-medium">
-            {entries.length} param{entries.length !== 1 ? "s" : ""}
-          </span>
-          <ChevronDown
-            className={`w-3.5 h-3.5 text-slate-300 transition-transform flex-shrink-0 ${collapsed ? "" : "rotate-180"}`}
-          />
-        </div>
+        <span className="w-5 h-5 border border-black bg-white flex items-center justify-center text-black text-[10px] font-bold flex-shrink-0">
+          {String.fromCharCode(65 + index)}
+        </span>
+        <span className="flex-1 text-sm font-bold text-black uppercase tracking-wide">{sectionName}</span>
+        <ChevronDown
+          className={`w-3.5 h-3.5 text-black transition-transform flex-shrink-0 ${collapsed ? "" : "rotate-180"}`}
+        />
       </button>
       {!collapsed && <div>{tableBody}</div>}
     </div>
   );
 }
 
-function SummaryStrip({ sections }) {
-  let normal = 0,
-    low = 0,
-    high = 0;
-  sections.forEach(([, sec]) => {
-    getSectionEntries(sec).forEach(([, field]) => {
-      if (!isResultField(field)) return;
-      const s = getStatus(field);
-      if (s === "normal") normal++;
-      else if (s === "low") low++;
-      else if (s === "high") high++;
-    });
-  });
-  const total = normal + low + high;
-  if (total === 0) return null;
-  return (
-    <div className="flex items-center gap-1 text-xs">
-      <ClipboardList className="w-3 h-3 text-black mr-1 flex-shrink-0" />
-      <span className="text-black font-semibold">{total} parameters:</span>
-      <span className="font-bold text-emerald-600 ml-1">{normal} Normal</span>
-      {low > 0 && (
-        <>
-          <span className="text-black mx-0.5">·</span>
-          <span className="font-bold text-amber-600">{low} Low</span>
-        </>
-      )}
-      {high > 0 && (
-        <>
-          <span className="text-black mx-0.5">·</span>
-          <span className="font-bold text-red-600">{high} High</span>
-        </>
-      )}
-    </div>
-  );
-}
-
-function PatientGrid({ patient }) {
-  const allFields = [
+function PatientGrid({ patient, isIndoor }) {
+  const mainFields = [
     { label: "Patient Name", value: patient.name, Icon: User },
     { label: "Age / Gender", value: [patient.age, patient.gender].filter(Boolean).join(" · "), Icon: Hash },
     { label: "Contact", value: patient.contact, Icon: Phone },
-    ...(patient.sampleDate ? [{ label: "Sample Date", value: patient.sampleDate, Icon: Calendar }] : []),
-    ...(patient.reportDate ? [{ label: "Report Date", value: patient.reportDate, Icon: Calendar }] : []),
+    { label: "Sample Date", value: patient.sampleDate, Icon: Calendar },
+    { label: "Report Date", value: patient.reportDate, Icon: Calendar },
   ];
-  const colCount = allFields.length;
-  const Cell = ({ label, value, Icon }) => (
-    <div className="bg-white px-3 py-2.5">
-      <div className="flex items-center gap-1 mb-1">
+  const Cell = ({ label, value, Icon, last }) => (
+    <div className={`bg-white px-3 py-2 border-b border-black ${last ? "" : "border-r"}`}>
+      <div className="flex items-center gap-1 mb-0.5">
         <Icon className="w-2.5 h-2.5 text-black flex-shrink-0" />
         <p className="text-[9px] font-bold text-black uppercase tracking-widest">{label}</p>
       </div>
-      <p className="text-xs font-bold text-black truncate">{value || "—"}</p>
+      <p className="text-xs font-semibold text-black truncate">{value || "—"}</p>
     </div>
   );
   return (
-    <div className="border-b border-slate-200">
-      <div
-        className="grid gap-px bg-slate-200 border-b border-slate-200"
-        style={{ gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))` }}
-      >
-        {allFields.map((f) => (
-          <Cell key={f.label} {...f} />
+    <div className="border border-black border-b-0">
+      <div className="grid grid-cols-5">
+        {mainFields.map((f, i) => (
+          <Cell key={f.label} {...f} last={i === mainFields.length - 1} />
         ))}
       </div>
-      <div className="bg-white px-3 py-2 flex items-center gap-3">
+      <div className="bg-white px-3 py-1.5 flex items-center gap-3 border-b border-black">
         <Stethoscope className="w-2.5 h-2.5 text-black flex-shrink-0" />
         <span className="text-[9px] font-bold text-black uppercase tracking-widest">Referred By</span>
-        <span className="text-xs font-bold text-black">{patient.referredBy || "—"}</span>
+        <span className="text-xs font-semibold text-black">{patient.referredBy || "—"}</span>
       </div>
     </div>
   );
 }
 
-// ── Print HTML builder ────────────────────────────────────────────────────────
-function buildPrintHTML({
-  reportName,
-  shortId,
-  patient,
-  labInfo,
-  sections,
-  printType,
-  isIndoor = false,
-  staticStandardRange = null,
-}) {
+// ── Print HTML builder — Tailwind (via Play CDN) for all visual styling.
+// Deliberately monochrome: black text, black rules, white paper. Status is
+// shown as a bordered box with bold text, whatever label was typed for the
+// matched tier — no color, no automatic low/high guessing, no shading.
+function buildPrintHTML({ reportName, shortId, patient, labInfo, sections, printType, isIndoor }) {
   const isPad = printType === "PAD";
   const padHeightMm = labInfo.padHeight > 0 ? labInfo.padHeight : DEFAULT_PAD_HEIGHT_MM;
 
-  const pillColor = (s) => ({ normal: "#166534", low: "#92400e", high: "#991b1b", tag: "#6d28d9" })[s] || "#000000";
-  const pillBg = (s) => ({ normal: "#f0fdf4", low: "#fffbeb", high: "#fef2f2", tag: "#f5f3ff" })[s] || "white";
-  const pillBdr = (s) => ({ normal: "#bbf7d0", low: "#fde68a", high: "#fecaca", tag: "#ddd6fe" })[s] || "#e2e8f0";
-  const rowBg = (s) => ({ normal: "white", low: "#fffdf5", high: "#fff8f8", tag: "#faf5ff" })[s] || "white";
-  const valColor = (s) => ({ normal: "#000000", low: "#92400e", high: "#991b1b", tag: "#6d28d9" })[s] || "#000000";
+  const statusHtml = (status, tagLabel) => {
+    if (!status) return `<span class="text-[11px] text-gray-300">—</span>`;
+    const TEXT = tagLabel || "—";
+    return `<span class="inline-block text-[9px] font-bold uppercase tracking-wide text-black border border-black py-0.5 px-[7px]">${TEXT}</span>`;
+  };
 
-  const renderSection = (sectionName, sectionData) => {
+  const renderSection = (sectionName, sectionData, index) => {
     const showHeader = sectionData.__showTitle !== false;
     const entries = getSectionEntries(sectionData);
-    const resultEntries = entries.filter(([, v]) => isResultField(v));
-    const plainEntries = entries.filter(([, v]) => !isResultField(v));
-    const hasResultTable = resultEntries.length > 0;
-    const hasUnits = resultEntries.some(([, v]) => Boolean(v.unit));
-    const hasRefInfo = resultEntries.some(([, v]) => Boolean(v.referenceRange) || Boolean(v.referenceTag));
-
-    const paramW = hasRefInfo ? "33%" : hasUnits ? "40%" : "58%";
-    const resultW = hasRefInfo ? "15%" : hasUnits ? "30%" : "42%";
-    const unitW = hasRefInfo ? "11%" : "30%";
-    const colSpan = 1 + (hasUnits ? 1 : 0) + (hasRefInfo ? 2 : 0);
+    const hasUnits = entries.some(([, v]) => Boolean(v.unit));
+    const hasStatus = entries.some(([, v]) => hasEvaluableStatus(v));
 
     const unitHeader = hasUnits
-      ? `<th style="padding:5px 10px;text-align:left;font-size:8.5px;font-weight:700;color:#000000;text-transform:uppercase;letter-spacing:.05em;width:${unitW};">Unit</th>`
+      ? `<th class="py-[5px] px-3 text-left text-[9px] font-bold text-black uppercase tracking-[0.05em] border-r border-black w-[12%]">Unit</th>`
+      : "";
+    const statusHeader = hasStatus
+      ? `<th class="py-[5px] px-3 text-left text-[9px] font-bold text-black uppercase tracking-[0.05em] w-[18%]">Status</th>`
       : "";
 
-    const rangeHeaders = hasRefInfo
-      ? `<th style="padding:5px 10px;text-align:left;font-size:8.5px;font-weight:700;color:#000000;text-transform:uppercase;letter-spacing:.05em;width:23%;">Ref. Range</th>
-         <th style="padding:5px 10px;text-align:left;font-size:8.5px;font-weight:700;color:#000000;text-transform:uppercase;letter-spacing:.05em;width:18%;">Status</th>`
-      : "";
-
-    // When the section has at least one result-style field, ALL fields —
-    // including radio/select/checkbox/textarea/plain-text ones — render as
-    // rows in this same table, with "—" filling the Unit/Ref-Range/Status
-    // columns for non-result fields. Only when no field is result-style
-    // does the section fall back to the plain two-column table below.
-    const combinedRows = entries
-      .map(([name, field]) => {
-        if (isResultField(field)) {
-          // referenceRange holds the matched tier's own bounds (e.g.
-          // "70–100", "> 10"); referenceTag holds its label (e.g. "High")
-          // — Ref. Range and Status show each separately.
-          const ref = field.referenceRange || "";
-          const info = hasRefInfo ? getStatusInfo(field) : null;
-          const st = info ? info.status : null;
-          const rangeCells = hasRefInfo
-            ? `<td style="padding:6px 10px;font-size:10.5px;color:#000000;font-weight:600;border-bottom:1px solid #f1f5f9;font-family:monospace;">${ref || "—"}</td>
-        <td style="padding:6px 10px;border-bottom:1px solid #f1f5f9;">
-          <span style="font-size:8.5px;font-weight:700;padding:2px 7px;background:${pillBg(st)};color:${pillColor(st)};border:1px solid ${pillBdr(st)};">${info ? info.label : "—"}</span>
-        </td>`
-            : "";
-          return `<tr style="background:${rowBg(st)};">
-        <td style="padding:6px 10px;font-size:11.5px;font-weight:600;color:#000000;border-bottom:1px solid #f1f5f9;">${name}</td>
-        <td style="padding:6px 10px;font-size:11.5px;font-weight:700;color:${valColor(st)};border-bottom:1px solid #f1f5f9;font-family:monospace;">${field.value}</td>
-        ${hasUnits ? `<td style="padding:6px 10px;font-size:9px;font-weight:700;color:#000000;border-bottom:1px solid #f1f5f9;">${field.unit || "—"}</td>` : ""}
-        ${rangeCells}
+    const rows = entries
+      .map(([name, field], i) => {
+        const value = formatValue(field);
+        const unit = field.unit || "";
+        const tierGroups =
+          Array.isArray(field.referenceTiers) && field.referenceTiers.length ? field.referenceTiers : null;
+        const ref = tierGroups ? null : getRefDisplay(field);
+        const refHtml = tierGroups
+          ? refTierRowsHtml(tierGroups)
+          : Array.isArray(ref)
+            ? refKeyValueRowsHtml(ref)
+            : ref || "—";
+        const status = hasEvaluableStatus(field) ? getStatus(field) : null;
+        const rowBg = i % 2 === 1 ? "bg-gray-50" : "bg-white";
+        const refIsBoxed = Boolean(tierGroups) || Array.isArray(ref);
+        const refBorder = hasStatus ? "border-r border-black" : "";
+        const refCellClass = refIsBoxed
+          ? `text-[11px] text-black border-b ${refBorder} align-top p-0`
+          : `py-[7px] px-3 text-[11px] text-black border-b ${refBorder} align-top`;
+        return `<tr class="${rowBg}">
+        <td class="py-[7px] px-3 text-xs text-black border-b border-r border-black">${name}</td>
+        <td class="py-[7px] px-3 text-xs font-bold text-black border-b border-r border-black">${value || "—"}</td>
+        ${hasUnits ? `<td class="py-[7px] px-3 text-[10px] font-semibold text-black border-b border-r border-black">${unit || "—"}</td>` : ""}
+        <td class="${refCellClass}">${refHtml}</td>
+        ${hasStatus ? `<td class="py-[7px] px-3 border-b border-black">${statusHtml(status, field.referenceTag)}</td>` : ""}
       </tr>`;
-        }
-        const val = Array.isArray(field.value) ? field.value.join(", ") : String(field.value ?? "—");
-        const dash = `<td style="padding:6px 10px;font-size:10px;color:#000000;font-weight:600;border-bottom:1px solid #f1f5f9;">—</td>`;
-        return `<tr>
-        <td style="padding:6px 10px;font-size:11.5px;font-weight:600;color:#000000;border-bottom:1px solid #f1f5f9;">${name}</td>
-        <td style="padding:6px 10px;font-size:11.5px;font-weight:700;color:#000000;border-bottom:1px solid #f1f5f9;">${val || "—"}</td>
-        ${hasUnits ? dash : ""}
-        ${hasRefInfo ? `${dash}<td style="padding:6px 10px;border-bottom:1px solid #f1f5f9;"><span style="font-size:8.5px;font-weight:700;padding:2px 7px;color:#000000;">—</span></td>` : ""}
-      </tr>`;
-      })
-      .join("");
-
-    const plainRows = plainEntries
-      .map(([name, field]) => {
-        const val = Array.isArray(field.value) ? field.value.join(", ") : String(field.value ?? "—");
-        return `<tr><td style="padding:6px 10px;font-size:11px;font-weight:600;color:#000000;border-bottom:1px solid #f1f5f9;">${name}</td><td style="padding:6px 10px;font-size:11px;font-weight:700;color:#000000;border-bottom:1px solid #f1f5f9;" colspan="${colSpan}">${val || "—"}</td></tr>`;
       })
       .join("");
 
     const headerHTML = showHeader
-      ? `<div style="background:#334155;padding:7px 12px;display:flex;align-items:center;justify-content:space-between;">
-           <span style="color:white;font-size:11.5px;font-weight:700;letter-spacing:0.01em;">${sectionName}</span>
-           <span style="color:rgba(255,255,255,0.6);font-size:8px;text-transform:uppercase;letter-spacing:0.05em;">${entries.length} parameter${entries.length !== 1 ? "s" : ""}</span>
-         </div>`
+      ? `<div class="bg-gray-100 border-b border-black py-2 px-3.5 flex items-center gap-2">
+          <span class="w-5 h-5 bg-white border border-black rounded-none flex items-center justify-center text-black text-[9px] font-bold">${String.fromCharCode(65 + index)}</span>
+          <span class="text-black text-xs font-bold uppercase tracking-wide flex-1">${sectionName}</span>
+        </div>`
       : "";
 
-    const resultTable = hasResultTable
-      ? `<table style="width:100%;border-collapse:collapse;">
-          <thead><tr style="background:#f8fafc;border-bottom:1px solid #e2e8f0;">
-            <th style="padding:5px 10px;text-align:left;font-size:8.5px;font-weight:700;color:#000000;text-transform:uppercase;letter-spacing:.05em;width:${paramW};">Parameter</th>
-            <th style="padding:5px 10px;text-align:left;font-size:8.5px;font-weight:700;color:#000000;text-transform:uppercase;letter-spacing:.05em;width:${resultW};">Result</th>
+    return `<div class="border border-black mb-2.5">
+      ${headerHTML}
+      <table class="w-full border-collapse">
+        <thead>
+          <tr class="bg-gray-100 border-b border-black">
+            <th class="py-[5px] px-3 text-left text-[9px] font-bold text-black uppercase tracking-[0.05em] border-r border-black w-[34%]">Parameter</th>
+            <th class="py-[5px] px-3 text-left text-[9px] font-bold text-black uppercase tracking-[0.05em] border-r border-black w-[16%]">Result</th>
             ${unitHeader}
-            ${rangeHeaders}
-          </tr></thead>
-          <tbody>${combinedRows}</tbody>
-        </table>`
-      : "";
-
-    const plainTable =
-      !hasResultTable && plainEntries.length > 0
-        ? `<table style="width:100%;border-collapse:collapse;"><tbody>${plainRows}</tbody></table>`
-        : "";
-
-    return `<div style="border:1px solid #e2e8f0;margin-bottom:10px;page-break-inside:avoid;">${headerHTML}${resultTable}${plainTable}</div>`;
+            <th class="py-[5px] px-3 text-left text-[9px] font-bold text-black uppercase tracking-[0.05em] ${hasStatus ? "border-r border-black" : ""} w-[24%]">Ref. Range</th>
+            ${statusHeader}
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
   };
 
   const mainFields = [
     { label: "Patient Name", value: patient.name },
     { label: "Age / Gender", value: [patient.age, patient.gender].filter(Boolean).join(" · ") },
     { label: "Contact", value: patient.contact },
-    ...(patient.sampleDate ? [{ label: "Sample Date", value: patient.sampleDate }] : []),
-    ...(patient.reportDate ? [{ label: "Report Date", value: patient.reportDate }] : []),
+    { label: "Sample Date", value: patient.sampleDate },
+    { label: "Report Date", value: patient.reportDate },
   ];
-  const colPct = Math.floor(100 / mainFields.length);
   const mainCells = mainFields
     .map(
-      ({ label, value }) =>
-        `<td style="padding:8px 12px;background:white;vertical-align:top;border-right:1px solid #e2e8f0;width:${colPct}%;">
-       <div style="font-size:7.5px;font-weight:700;color:#000000;text-transform:uppercase;letter-spacing:.07em;margin-bottom:3px;">${label}</div>
-       <div style="font-size:11px;font-weight:700;color:#000000;">${value || "—"}</div>
-     </td>`,
+      ({ label, value }, i) =>
+        `<td class="py-1.5 px-3 bg-white align-top ${i < mainFields.length - 1 ? "border-r" : ""} border-black w-1/5">
+          <div class="text-[8px] font-bold text-black uppercase tracking-[0.06em]">${label}</div>
+          <div class="text-[11px] font-semibold text-black mt-0.5">${value || "—"}</div>
+        </td>`,
     )
     .join("");
 
-  let normal = 0,
-    low = 0,
-    high = 0;
-  sections.forEach(([, sec]) => {
-    getSectionEntries(sec).forEach(([, field]) => {
-      if (!isResultField(field)) return;
-      const s = getStatus(field);
-      if (s === "normal") normal++;
-      else if (s === "low") low++;
-      else if (s === "high") high++;
-    });
-  });
-  const total = normal + low + high;
-
   const topBlock = isPad
-    ? `<div style="height:${padHeightMm}mm;"></div>`
-    : `<table style="width:100%;border-collapse:collapse;border-bottom:2px solid #000000;margin-bottom:0;">
-         <tr>
-           <td style="padding:14px 16px;vertical-align:top;">
-             <div style="font-size:17px;font-weight:800;color:#000000;letter-spacing:-0.02em;">${labInfo.name}</div>
-             ${labInfo.tagline ? `<div style="font-size:9px;color:#000000;font-weight:600;margin-top:3px;letter-spacing:0.04em;text-transform:uppercase;">${labInfo.tagline}</div>` : ""}
-             <div style="font-size:9px;color:#000000;font-weight:600;margin-top:5px;">${labInfo.address}</div>
-           </td>
-           <td style="padding:14px 16px;vertical-align:top;text-align:right;">
-             <div style="font-size:9px;color:#000000;font-weight:700;">${labInfo.phone}</div>
-             ${labInfo.email ? `<div style="font-size:9px;color:#000000;font-weight:600;margin-top:2px;">${labInfo.email}</div>` : ""}
-             ${labInfo.regNo ? `<div style="font-size:8px;color:#000000;font-weight:600;margin-top:4px;font-family:monospace;">Reg: ${labInfo.regNo}</div>` : ""}
-           </td>
-         </tr>
-       </table>`;
+    ? `<div style="height:${padHeightMm}mm;" class="bg-white"></div>`
+    : `<div class="border-b-2 border-black py-4 px-1 flex items-start justify-between">
+        <div>
+          <div class="text-[16px] font-bold text-black uppercase tracking-wide">${labInfo.name}</div>
+          ${labInfo.tagline ? `<div class="text-[10px] text-black italic mt-[3px]">${labInfo.tagline}</div>` : ""}
+          <div class="text-[9px] text-black mt-1">${labInfo.address}</div>
+        </div>
+        <div class="text-right">
+          <div class="text-[9px] text-black">Tel: ${labInfo.phone}</div>
+          ${labInfo.email ? `<div class="text-[9px] text-black mt-0.5">${labInfo.email}</div>` : ""}
+          ${labInfo.regNo ? `<div class="text-[9px] text-black mt-1">Reg. No: ${labInfo.regNo}</div>` : ""}
+        </div>
+      </div>`;
 
   const footerBlock = isPad
     ? ""
-    : `<div class="print-footer">
-         <table style="width:100%;"><tr>
-           <td style="width:45%;padding-right:20px;"><div style="height:28px;border-bottom:1px solid #94a3b8;"></div><div style="font-size:8px;color:#000000;font-weight:600;margin-top:3px;">Pathologist Signature &amp; Seal</div></td>
-           <td style="width:10%;"></td>
-           <td style="width:45%;padding-left:20px;"><div style="height:28px;border-bottom:1px solid #94a3b8;"></div><div style="font-size:8px;color:#000000;font-weight:600;margin-top:3px;text-align:right;">Authorized Signatory</div></td>
-         </tr></table>
-         <div style="font-size:8px;color:#000000;font-weight:600;text-align:center;margin-top:10px;">For qualified medical professionals only. Interpret results in full clinical context. · ${labInfo.name} · ${labInfo.phone}</div>
-       </div>`;
+    : `<div class="py-2.5 px-1 border-t border-black bg-white print:fixed print:bottom-0 print:left-0 print:right-0">
+        <table class="w-full max-w-[680px] mx-auto mb-2">
+          <tr>
+            <td class="w-[45%] pr-5">
+              <div class="h-[30px] border-b border-dashed border-black"></div>
+              <div class="text-[9px] text-black mt-[3px]">Pathologist Signature &amp; Seal</div>
+            </td>
+            <td class="w-[10%]"></td>
+            <td class="w-[45%] pl-5">
+              <div class="h-[30px] border-b border-dashed border-black"></div>
+              <div class="text-[9px] text-black mt-[3px] text-right">Authorized Signatory</div>
+            </td>
+          </tr>
+        </table>
+        <div class="text-[9px] text-black text-center max-w-[680px] mx-auto">
+          For qualified medical professionals only. Interpret results in full clinical context. · ${labInfo.name} · ${labInfo.phone}
+        </div>
+      </div>`;
 
-  const rangeSidebar = staticStandardRange
-    ? `<div style="flex:0 0 200px;border:1px solid #e2e8f0;page-break-inside:avoid;align-self:flex-start;overflow:hidden;">
-         <div style="background:#334155;padding:7px 12px;">
-           <span style="color:white;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;">Standard Reference</span>
-         </div>
-         <div style="background:#f8fafc;padding:10px 12px;">
-           <div style="font-size:10px;color:#000000;font-weight:600;line-height:1.5;white-space:pre-wrap;">${escapeHtml(staticStandardRange)}</div>
-         </div>
-       </div>`
-    : "";
-
-  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/><title>${reportName}</title>
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>${reportName}</title>
+<script src="https://cdn.tailwindcss.com"></script>
 <style>
-  * { box-sizing:border-box; margin:0; padding:0; }
-  body { font-family:'Segoe UI',Arial,sans-serif; background:white; color:#000000; -webkit-print-color-adjust:exact; print-color-adjust:exact; font-size:12px; }
-  @page { size:A4; margin:16mm 16mm 22mm 16mm; }
-  @media print {
-    .print-footer { position:fixed; bottom:0; left:0; right:0; padding:10px 16mm; background:white; border-top:1px solid #e2e8f0; }
-    body { padding-bottom:0; }
-  }
-  @media screen {
-    body { padding:20px; max-width:720px; margin:0 auto; }
-    .print-footer { margin-top:30px; padding-top:16px; border-top:1px solid #e2e8f0; }
-  }
+  @page { size: A4; margin: 14mm; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 </style>
-</head><body>
-  ${topBlock}
-  <div style="background:#f8fafc;padding:8px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e2e8f0;border-top:1px solid #e2e8f0;margin-bottom:0;">
-    <div style="font-size:13px;font-weight:700;color:#000000;">${reportName}</div>
-    ${shortId ? `<div style="font-size:8.5px;color:#000000;font-family:monospace;font-weight:700;">${isIndoor ? "Admission" : "Invoice"}: ${shortId}</div>` : ""}
-  </div>
-  <table style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-top:none;">
-    <tr style="border-bottom:1px solid #e2e8f0;">${mainCells}</tr>
-    <tr><td colspan="5" style="padding:6px 12px;background:#fafafa;">
-      <span style="font-size:7.5px;font-weight:700;color:#000000;text-transform:uppercase;letter-spacing:.07em;margin-right:10px;">Referred By</span>
-      <span style="font-size:11px;font-weight:700;color:#000000;">${patient.referredBy || "—"}</span>
-    </td></tr>
-  </table>
-  ${
-    total > 0
-      ? `<div style="background:#f8fafc;padding:6px 16px;border:1px solid #e2e8f0;border-top:none;font-size:10.5px;display:flex;gap:8px;align-items:center;">
-    <span style="color:#000000;font-weight:700;">${total} parameters:</span>
-    <span style="font-weight:700;color:#166534;">${normal} Normal</span>
-    ${low > 0 ? `<span style="color:#000000;">·</span><span style="font-weight:700;color:#92400e;">${low} Low</span>` : ""}
-    ${high > 0 ? `<span style="color:#000000;">·</span><span style="font-weight:700;color:#991b1b;">${high} High</span>` : ""}
-  </div>`
-      : ""
-  }
-  <div style="margin-top:14px;display:flex;gap:12px;align-items:flex-start;">
-    <div style="flex:1;min-width:0;">
-      ${sections.map(([name, data]) => renderSection(name, data)).join("")}
+</head>
+<body class="font-sans bg-white text-black m-0 p-0">
+  <div class="max-w-[680px] mx-auto ${isPad ? "pb-5" : "pb-[90px]"}">
+    ${topBlock}
+    <div class="bg-gray-100 py-2 px-3 flex items-center justify-between border border-black border-t-0">
+      <div class="text-sm font-bold text-black uppercase tracking-wide">${reportName}</div>
+      ${shortId ? `<div class="text-[9px] text-black font-mono">${isIndoor ? "Admission No" : "Invoice No"}: ${shortId}</div>` : ""}
     </div>
-    ${rangeSidebar}
+    <table class="w-full border-collapse border border-black border-t-0">
+      <tr class="border-b border-black">${mainCells}</tr>
+      <tr>
+        <td colspan="5" class="py-[5px] px-3 bg-white">
+          <span class="text-[8px] font-bold text-black uppercase tracking-[0.06em] mr-2.5">Referred By</span>
+          <span class="text-[11px] font-semibold text-black">${patient.referredBy || "—"}</span>
+        </td>
+      </tr>
+    </table>
+    <div class="pt-1 px-1">
+      ${sections.map(([name, data], i) => renderSection(name, data, i)).join("")}
+    </div>
   </div>
   ${footerBlock}
-</body></html>`;
+</body>
+</html>`;
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
@@ -645,7 +547,6 @@ function ReportViewer({
   printType = "PLAIN",
   invoiceId = null,
   isIndoor = false,
-  staticStandardRange = null,
 }) {
   const [dlStatus, setDlStatus] = useState("idle");
   const [shareStatus, setShareStatus] = useState("idle");
@@ -661,9 +562,6 @@ function ReportViewer({
       !REPORT_META_KEYS.has(key) && val !== null && typeof val === "object" && !Array.isArray(val) && !val.$oid,
   );
 
-  // isPad is now forwarded to ReportPDFDocument (previously only the print
-  // path knew about pad mode — Download PDF always rendered the full
-  // letterhead/footer even for a Pad-type report).
   const generateBlob = () =>
     pdf(
       <ReportPDFDocument
@@ -673,7 +571,6 @@ function ReportViewer({
         patient={resolvedPatient}
         labInfo={labInfo}
         isIndoor={isIndoor}
-        staticStandardRange={staticStandardRange}
         isPad={isPad}
       />,
     ).toBlob();
@@ -687,17 +584,20 @@ function ReportViewer({
       sections,
       printType,
       isIndoor,
-      staticStandardRange,
     });
+
     const existing = document.getElementById("ur-print-frame");
     if (existing) existing.remove();
+
     const iframe = document.createElement("iframe");
     iframe.id = "ur-print-frame";
-    iframe.style.cssText = "position:fixed;top:0;left:0;width:0;height:0;border:none;visibility:hidden;";
+    iframe.className = "fixed top-0 left-0 w-0 h-0 border-0 invisible";
     document.body.appendChild(iframe);
+
     iframe.contentDocument.open();
     iframe.contentDocument.write(html);
     iframe.contentDocument.close();
+
     iframe.onload = () => {
       iframe.contentWindow.focus();
       iframe.contentWindow.print();
@@ -760,7 +660,7 @@ function ReportViewer({
     dlStatus === "loading" ? (
       <Loader2 className="w-3.5 h-3.5 animate-spin" />
     ) : dlStatus === "done" ? (
-      <Check className="w-3.5 h-3.5" />
+      <Check className="w-3.5 h-3.5 text-emerald-400" />
     ) : (
       <Download className="w-3.5 h-3.5" />
     );
@@ -769,7 +669,7 @@ function ReportViewer({
     shareStatus === "loading" ? (
       <Loader2 className="w-3.5 h-3.5 animate-spin" />
     ) : shareStatus === "copied" || shareStatus === "done" ? (
-      <Check className="w-3.5 h-3.5" />
+      <Check className="w-3.5 h-3.5 text-emerald-500" />
     ) : (
       <Share2 className="w-3.5 h-3.5" />
     );
@@ -783,19 +683,20 @@ function ReportViewer({
           : "Share";
 
   return (
-    <div className={`mx-auto font-sans ${staticStandardRange ? "max-w-4xl" : "max-w-2xl"}`}>
-      {/* Action buttons */}
+    <div className="max-w-2xl mx-auto font-sans">
+      {/* Toolbar — unchanged from before, not part of the printed/PDF
+          report, keeps its normal interactive styling. */}
       <div className="flex items-center justify-end gap-2 mb-3">
         <button
           onClick={handleShare}
           disabled={shareStatus === "loading"}
-          className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-black bg-white border border-slate-200 hover:border-slate-400 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+          className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-600 bg-white border border-slate-200 rounded-lg hover:border-slate-400 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {shIcon} {shLabel}
         </button>
         <button
           onClick={handlePrint}
-          className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-black bg-white border border-slate-200 hover:border-slate-400 transition-all"
+          className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-600 bg-white border border-slate-200 rounded-lg hover:border-slate-400 transition-all"
         >
           <Printer className="w-3.5 h-3.5" />
           {isPad ? "Print (Pad)" : "Print (Plain A4)"}
@@ -803,127 +704,95 @@ function ReportViewer({
         <button
           onClick={handleDownload}
           disabled={dlStatus === "loading"}
-          className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-white bg-slate-800 hover:bg-slate-700 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+          className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-slate-800 rounded-lg hover:bg-slate-700 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {dlIcon} {dlLabel}
         </button>
       </div>
 
-      <div className={`flex items-start gap-4 ${staticStandardRange ? "flex-col lg:flex-row" : ""}`}>
-        {/* Report column */}
-        <div className="flex-1 min-w-0 w-full">
-          {/* Report card */}
-          <div className="bg-white border border-slate-200 overflow-hidden">
-            {/* Lab header */}
-            {!isPad && (
-              <div className="px-5 py-4 flex items-start justify-between gap-4 border-b-2 border-slate-800 bg-white">
-                <div className="flex items-start gap-3">
-                  <div className="w-9 h-9 bg-slate-800 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <FlaskConical className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-extrabold text-black tracking-tight">{labInfo.name}</p>
-                    {labInfo.tagline && (
-                      <p className="text-[10px] font-semibold text-black mt-0.5 uppercase tracking-widest">
-                        {labInfo.tagline}
-                      </p>
-                    )}
-                    <div className="flex items-center gap-1 mt-1.5">
-                      <MapPin className="w-2.5 h-2.5 text-black flex-shrink-0" />
-                      <p className="text-[10px] font-semibold text-black">{labInfo.address}</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="text-right flex-shrink-0 space-y-1">
-                  <div className="flex items-center justify-end gap-1">
-                    <Phone className="w-2.5 h-2.5 text-black" />
-                    <p className="text-[10px] font-semibold text-black">{labInfo.phone}</p>
-                  </div>
-                  {labInfo.email && (
-                    <div className="flex items-center justify-end gap-1">
-                      <Mail className="w-2.5 h-2.5 text-black" />
-                      <p className="text-[10px] font-semibold text-black">{labInfo.email}</p>
-                    </div>
-                  )}
-                  {labInfo.regNo && (
-                    <p className="text-[9px] font-mono font-semibold text-black">Reg: {labInfo.regNo}</p>
-                  )}
+      {/* Report body — doc-style monochrome layout: black rules, black
+          text, boxed parameter/result/range/status cells, matching what
+          actually prints (PDF and browser print alike). */}
+      <div className="bg-white border border-black">
+        {!isPad && (
+          <div className="border-b-2 border-black px-5 py-4 flex items-start justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 border border-black flex items-center justify-center flex-shrink-0 mt-0.5">
+                <FlaskConical className="w-5 h-5 text-black" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-black uppercase tracking-wide">{labInfo.name}</p>
+                {labInfo.tagline && <p className="text-black text-[11px] mt-0.5 italic">{labInfo.tagline}</p>}
+                <div className="flex items-center gap-1 mt-1.5">
+                  <MapPin className="w-2.5 h-2.5 text-black flex-shrink-0" />
+                  <p className="text-black text-[10px]">{labInfo.address}</p>
                 </div>
               </div>
-            )}
-
-            {/* Report title bar */}
-            <div className="flex items-center justify-between px-5 py-2.5 border-b border-slate-200 bg-slate-50">
-              <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-black flex-shrink-0" />
-                <h2 className="text-sm font-bold text-black">{resolvedReportName}</h2>
+            </div>
+            <div className="text-right flex-shrink-0 space-y-1">
+              <div className="flex items-center justify-end gap-1">
+                <Phone className="w-2.5 h-2.5 text-black" />
+                <p className="text-black text-[10px]">{labInfo.phone}</p>
               </div>
-              {shortId && (
-                <p className="text-[10px] text-black font-mono font-semibold">
-                  {isIndoor ? "Admission" : "Invoice"}: {shortId}
-                </p>
+              {labInfo.email && (
+                <div className="flex items-center justify-end gap-1">
+                  <Mail className="w-2.5 h-2.5 text-black" />
+                  <p className="text-black text-[10px]">{labInfo.email}</p>
+                </div>
               )}
-            </div>
-
-            <PatientGrid patient={resolvedPatient} />
-
-            {/* Summary strip */}
-            <div className="px-5 py-2 border-b border-slate-200 bg-slate-50">
-              <SummaryStrip sections={sections} />
-            </div>
-
-            {/* Sections */}
-            <div className="px-5 pt-4 pb-4">
-              {sections.map(([sectionName, sectionData]) => (
-                <Section
-                  key={sectionName}
-                  sectionName={sectionName}
-                  sectionData={sectionData}
-                  showHeader={sectionData.__showTitle !== false}
-                />
-              ))}
+              {labInfo.regNo && <p className="text-black text-[10px]">Reg. No: {labInfo.regNo}</p>}
             </div>
           </div>
+        )}
 
-          {/* Footer signatures */}
-          {!isPad && (
-            <div className="mt-8 pt-6 border-t border-slate-200">
-              <div className="grid grid-cols-2 gap-8 mb-5">
-                <div>
-                  <div className="h-10 border-b border-dashed border-slate-300" />
-                  <p className="text-[10px] font-semibold text-black mt-1.5">Pathologist Signature &amp; Seal</p>
-                </div>
-                <div>
-                  <div className="h-10 border-b border-dashed border-slate-300" />
-                  <p className="text-[10px] font-semibold text-black mt-1.5 text-right">Authorized Signatory</p>
-                </div>
-              </div>
-              <p className="text-[10px] font-semibold text-black text-center leading-relaxed">
-                For qualified medical professionals only. Interpret results in full clinical context.
-                <span className="mx-1.5">·</span>
-                {labInfo.name}
-                <span className="mx-1.5">·</span>
-                {labInfo.phone}
-              </p>
-            </div>
+        <div className="flex items-center justify-between px-5 py-2.5 bg-gray-100 border-b border-black">
+          <div className="flex items-center gap-2">
+            <FileText className="w-4 h-4 text-black flex-shrink-0" />
+            <h2 className="text-sm font-bold text-black uppercase tracking-wide">{resolvedReportName}</h2>
+          </div>
+          {shortId && (
+            <p className="text-[10px] text-black font-mono">
+              {isIndoor ? "Admission No" : "Invoice No"}: {shortId}
+            </p>
           )}
         </div>
 
-        {/* Static standard range sidebar */}
-        {staticStandardRange && (
-          <aside className="w-full lg:w-64 shrink-0 border border-slate-200 overflow-hidden lg:sticky lg:top-4">
-            <div className="bg-slate-700 px-4 py-2.5 flex items-center gap-1.5">
-              <ClipboardList className="w-3 h-3 text-slate-300" />
-              <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-200">Standard Reference</h3>
-            </div>
-            <div className="bg-slate-50 p-4">
-              <p className="text-xs font-semibold text-black whitespace-pre-wrap leading-relaxed">
-                {staticStandardRange}
-              </p>
-            </div>
-          </aside>
-        )}
+        <PatientGrid patient={resolvedPatient} isIndoor={isIndoor} />
+
+        <div className="px-5 pt-4 pb-4">
+          {sections.map(([sectionName, sectionData], i) => (
+            <Section
+              key={sectionName}
+              sectionName={sectionName}
+              sectionData={sectionData}
+              index={i}
+              showHeader={sectionData.__showTitle !== false}
+            />
+          ))}
+        </div>
       </div>
+
+      {!isPad && (
+        <div className="mt-8 pt-6 border-t border-black">
+          <div className="grid grid-cols-2 gap-8 mb-5">
+            <div>
+              <div className="h-10 border-b border-dashed border-black" />
+              <p className="text-[10px] text-black mt-1.5">Pathologist Signature &amp; Seal</p>
+            </div>
+            <div>
+              <div className="h-10 border-b border-dashed border-black" />
+              <p className="text-[10px] text-black mt-1.5 text-right">Authorized Signatory</p>
+            </div>
+          </div>
+          <p className="text-[10px] text-black text-center leading-relaxed">
+            For qualified medical professionals only. Interpret results in full clinical context.
+            <span className="mx-1.5">·</span>
+            {labInfo.name}
+            <span className="mx-1.5">·</span>
+            {labInfo.phone}
+          </p>
+        </div>
+      )}
     </div>
   );
 }
