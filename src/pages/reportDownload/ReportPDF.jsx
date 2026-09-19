@@ -134,9 +134,22 @@ const s = StyleSheet.create({
 function getStatus(field) {
   return field?.referenceTag || null;
 }
+// A field only routed to plainEntries (the narrow name+value layout) when
+// it has none of these — but a Key-Value Pair reference (referenceValue as
+// an array of groups) was missing from this check, so a field with no unit
+// and no numeric range — e.g. a text/textarea field carrying only a
+// grouped Key-Value reference — fell into plainEntries instead of the
+// properly width-balanced resultEntries table, and got squeezed into a
+// sliver of the row width. Any field carrying that grouped reference now
+// counts as a result field regardless of whether it also has a unit.
 function isResultField(field) {
   if (!field || typeof field !== "object") return false;
-  return Boolean(field.referenceRange) || Boolean(field.referenceTag) || Boolean(field.unit);
+  return (
+    Boolean(field.referenceRange) ||
+    Boolean(field.referenceTag) ||
+    Boolean(field.unit) ||
+    Array.isArray(field.referenceValue)
+  );
 }
 function hasEvaluableStatus(field) {
   return Boolean(field?.referenceTag);
@@ -214,12 +227,12 @@ function RefKeyValueBoxPDF({ groups }) {
               borderTop: i > 0 ? `1 solid ${LINE}` : undefined,
               backgroundColor: HEAD_BG,
               paddingVertical: 2,
-              paddingHorizontal: 6,
+              paddingHorizontal: 5,
             }}
           >
             <Text
               style={{
-                fontSize: 6.5,
+                fontSize: 7,
                 fontFamily: "Helvetica-Bold",
                 color: BLACK,
                 textAlign: "center",
@@ -243,22 +256,22 @@ function RefKeyValueBoxPDF({ groups }) {
                 flexGrow: 1,
                 flexShrink: 1,
                 borderRight: `1 solid ${LINE}`,
-                paddingVertical: 4,
-                paddingHorizontal: 6,
+                paddingVertical: 3,
+                paddingHorizontal: 5,
               }}
             >
-              <Text style={{ fontSize: 7, fontFamily: "Helvetica", color: BLACK }}>{line.key}</Text>
+              <Text style={{ fontSize: 7.5, fontFamily: "Helvetica", color: BLACK }}>{line.key}</Text>
             </View>
             <View
               style={{
                 flexBasis: 0,
                 flexGrow: 1,
                 flexShrink: 1,
-                paddingVertical: 4,
-                paddingHorizontal: 6,
+                paddingVertical: 3,
+                paddingHorizontal: 5,
               }}
             >
-              <Text style={{ fontSize: 7, fontFamily: "Helvetica", color: BLACK }}>{line.value}</Text>
+              <Text style={{ fontSize: 7.5, fontFamily: "Helvetica", color: BLACK }}>{line.value}</Text>
             </View>
           </View>
         ),
@@ -285,12 +298,12 @@ function RefTierBoxPDF({ groups, smart = true }) {
               borderTop: i > 0 ? `1 solid ${LINE}` : undefined,
               backgroundColor: HEAD_BG,
               paddingVertical: 2,
-              paddingHorizontal: 6,
+              paddingHorizontal: 5,
             }}
           >
             <Text
               style={{
-                fontSize: 6.5,
+                fontSize: 7,
                 fontFamily: "Helvetica-Bold",
                 color: BLACK,
                 textAlign: "center",
@@ -315,29 +328,39 @@ function RefTierBoxPDF({ groups, smart = true }) {
                 flexGrow: 1,
                 flexShrink: 1,
                 borderRight: `1 solid ${LINE}`,
-                paddingVertical: 3,
-                paddingHorizontal: 6,
+                paddingVertical: 2,
+                paddingHorizontal: 5,
                 flexDirection: "row",
                 alignItems: "center",
-                justifyContent: "space-between",
                 gap: 4,
               }}
             >
-              <Text style={{ fontSize: 7, fontFamily: matched ? "Helvetica-Bold" : "Helvetica", color: BLACK }}>
+              <Text
+                style={{
+                  flexGrow: 1,
+                  flexShrink: 1,
+                  flexBasis: 0,
+                  fontSize: 7.5,
+                  fontFamily: matched ? "Helvetica-Bold" : "Helvetica",
+                  color: BLACK,
+                }}
+              >
                 {line.label}
               </Text>
-              {matched && <Text style={{ fontSize: 7, fontFamily: "Helvetica-Bold", color: BLACK }}>✓</Text>}
+              {matched && (
+                <Text style={{ flexShrink: 0, fontSize: 7.5, fontFamily: "Helvetica-Bold", color: BLACK }}>✓</Text>
+              )}
             </View>
             <View
               style={{
                 flexBasis: 0,
                 flexGrow: 1,
                 flexShrink: 1,
-                paddingVertical: 3,
-                paddingHorizontal: 6,
+                paddingVertical: 2,
+                paddingHorizontal: 5,
               }}
             >
-              <Text style={{ fontSize: 7, fontFamily: matched ? "Helvetica-Bold" : "Helvetica", color: BLACK }}>
+              <Text style={{ fontSize: 7.5, fontFamily: matched ? "Helvetica-Bold" : "Helvetica", color: BLACK }}>
                 {line.range}
               </Text>
             </View>
@@ -355,13 +378,15 @@ function PDFSection({ sectionName, sectionData, index, showHeader, smart = true 
   const hasUnits = resultEntries.some(([, v]) => Boolean(v.unit));
   const hasStatus = smart && resultEntries.some(([, v]) => hasEvaluableStatus(v));
 
+  // Parameter/Result/Unit trimmed down and the freed-up space handed to
+  // Ref. Range, since that column carries the full tier/key-value table.
   const W = hasUnits
     ? hasStatus
-      ? { param: 30, result: 14, unit: 12, ref: 24, status: 20 }
-      : { param: 34, result: 18, unit: 14, ref: 34 }
+      ? { param: 22, result: 12, unit: 8, ref: 38, status: 20 }
+      : { param: 24, result: 14, unit: 10, ref: 52 }
     : hasStatus
-      ? { param: 34, result: 18, ref: 28, status: 20 }
-      : { param: 38, result: 22, ref: 40 };
+      ? { param: 24, result: 14, ref: 42, status: 20 }
+      : { param: 26, result: 18, ref: 56 };
 
   return (
     <View style={s.sectionWrap}>

@@ -273,21 +273,18 @@ function RefKeyValuePanel({ groups }) {
         line.type === "header" ? (
           <div
             key={i}
-            className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-500 text-center bg-slate-50 ${
+            className={`px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-500 text-center bg-slate-50 ${
               i > 0 ? "border-t border-slate-200" : ""
             }`}
           >
             {line.label}
           </div>
         ) : (
-          <div
-            key={i}
-            className={`grid grid-cols-2 text-[11px] leading-snug ${i > 0 ? "border-t border-slate-200" : ""}`}
-          >
-            <span className="px-3 py-1.5 border-r border-slate-200 text-slate-600 font-medium break-words min-w-0">
+          <div key={i} className={`grid grid-cols-2 text-xs leading-snug ${i > 0 ? "border-t border-slate-200" : ""}`}>
+            <span className="px-2 py-1 border-r border-slate-200 text-slate-600 font-medium break-words min-w-0">
               {line.key}
             </span>
-            <span className="px-3 py-1.5 text-slate-600 font-medium break-words min-w-0">{line.value}</span>
+            <span className="px-2 py-1 text-slate-600 font-medium break-words min-w-0">{line.value}</span>
           </div>
         ),
       )}
@@ -427,7 +424,7 @@ function RefTierPanel({ groups }) {
         line.type === "header" ? (
           <div
             key={i}
-            className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-500 text-center bg-slate-50 ${
+            className={`px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-500 text-center bg-slate-50 ${
               i > 0 ? "border-t border-slate-200" : ""
             }`}
           >
@@ -436,20 +433,20 @@ function RefTierPanel({ groups }) {
         ) : (
           <div
             key={i}
-            className={`grid grid-cols-2 text-[11px] leading-snug ${i > 0 ? "border-t border-slate-200" : ""} ${
+            className={`grid grid-cols-2 text-xs leading-snug ${i > 0 ? "border-t border-slate-200" : ""} ${
               line.matched ? "bg-violet-50" : ""
             }`}
           >
             <span
-              className={`px-3 py-1.5 border-r border-slate-200 flex items-center justify-between gap-1 break-words min-w-0 ${
+              className={`px-2 py-1 border-r border-slate-200 flex items-center gap-1 ${
                 line.matched ? "font-bold text-violet-700" : "text-slate-600"
               }`}
             >
-              <span className="break-words">{line.label}</span>
+              <span className="flex-1 min-w-0 break-words">{line.label}</span>
               {line.matched && <Check className="w-3 h-3 text-violet-600 flex-shrink-0" />}
             </span>
             <span
-              className={`px-3 py-1.5 break-words min-w-0 ${line.matched ? "font-bold text-violet-700" : "text-slate-600"}`}
+              className={`px-2 py-1 break-words min-w-0 ${line.matched ? "font-bold text-violet-700" : "text-slate-600"}`}
             >
               {line.range}
             </span>

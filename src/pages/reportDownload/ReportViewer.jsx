@@ -103,16 +103,16 @@ function RefKeyValueBox({ groups }) {
         line.type === "header" ? (
           <div
             key={i}
-            className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-black text-center bg-gray-100 ${
+            className={`px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-black text-center bg-gray-100 ${
               i > 0 ? "border-t border-black" : ""
             }`}
           >
             {line.label}
           </div>
         ) : (
-          <div key={i} className={`grid grid-cols-2 text-[11px] leading-snug ${i > 0 ? "border-t border-black" : ""}`}>
-            <span className="px-3 py-2 border-r border-black text-black break-words min-w-0">{line.key}</span>
-            <span className="px-3 py-2 text-black break-words min-w-0">{line.value}</span>
+          <div key={i} className={`grid grid-cols-2 text-xs leading-snug ${i > 0 ? "border-t border-black" : ""}`}>
+            <span className="px-2 py-1 border-r border-black text-black break-words min-w-0">{line.key}</span>
+            <span className="px-2 py-1 text-black break-words min-w-0">{line.value}</span>
           </div>
         ),
       )}
@@ -148,7 +148,7 @@ function RefTierBox({ groups, smart = true }) {
         return line.type === "header" ? (
           <div
             key={i}
-            className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-black text-center bg-gray-100 ${
+            className={`px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-black text-center bg-gray-100 ${
               i > 0 ? "border-t border-black" : ""
             }`}
           >
@@ -157,19 +157,19 @@ function RefTierBox({ groups, smart = true }) {
         ) : (
           <div
             key={i}
-            className={`grid grid-cols-2 text-[11px] leading-snug ${i > 0 ? "border-t border-black" : ""} ${
+            className={`grid grid-cols-2 text-xs leading-snug ${i > 0 ? "border-t border-black" : ""} ${
               matched ? "bg-gray-200" : ""
             }`}
           >
             <span
-              className={`px-3 py-1 border-r border-black text-black flex items-center justify-between gap-1 break-words min-w-0 ${
+              className={`px-2 py-1 border-r border-black text-black flex items-center gap-1 ${
                 matched ? "font-bold" : ""
               }`}
             >
-              <span className="break-words">{line.label}</span>
+              <span className="flex-1 min-w-0 break-words">{line.label}</span>
               {matched && <Check className="w-3 h-3 flex-shrink-0" />}
             </span>
-            <span className={`px-3 py-1 text-black break-words min-w-0 ${matched ? "font-bold" : ""}`}>
+            <span className={`px-2 py-1 text-black break-words min-w-0 ${matched ? "font-bold" : ""}`}>
               {line.range}
             </span>
           </div>
@@ -186,11 +186,11 @@ function refKeyValueRowsHtml(groups) {
     .map((line, i) => {
       const borderTop = i > 0 ? "border-top:1px solid #000;" : "";
       if (line.type === "header") {
-        return `<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:#000;text-align:center;padding:4px 12px;background:#f3f4f6;${borderTop}">${line.label}</div>`;
+        return `<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:#000;text-align:center;padding:3px 10px;background:#f3f4f6;${borderTop}">${line.label}</div>`;
       }
-      return `<div style="display:grid;grid-template-columns:1fr 1fr;font-size:10px;color:#000;min-width:0;${borderTop}">
-        <div style="padding:6px 12px;border-right:1px solid #000;min-width:0;overflow-wrap:break-word;word-break:break-word;">${line.key}</div>
-        <div style="padding:6px 12px;min-width:0;overflow-wrap:break-word;word-break:break-word;">${line.value}</div>
+      return `<div style="display:grid;grid-template-columns:1fr 1fr;font-size:11px;color:#000;min-width:0;${borderTop}">
+        <div style="padding:4px 10px;border-right:1px solid #000;min-width:0;overflow-wrap:break-word;word-break:break-word;">${line.key}</div>
+        <div style="padding:4px 10px;min-width:0;overflow-wrap:break-word;word-break:break-word;">${line.value}</div>
       </div>`;
     })
     .join("");
@@ -203,17 +203,17 @@ function refTierRowsHtml(groups, smart = true) {
     .map((line, i) => {
       const borderTop = i > 0 ? "border-top:1px solid #000;" : "";
       if (line.type === "header") {
-        return `<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:#000;text-align:center;padding:4px 12px;background:#f3f4f6;${borderTop}">${line.label}</div>`;
+        return `<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:#000;text-align:center;padding:3px 10px;background:#f3f4f6;${borderTop}">${line.label}</div>`;
       }
       const matched = smart && line.matched;
-      return `<div style="display:grid;grid-template-columns:1fr 1fr;font-size:10px;color:#000;min-width:0;${borderTop}${
+      return `<div style="display:grid;grid-template-columns:1fr 1fr;font-size:11px;color:#000;min-width:0;${borderTop}${
         matched ? "background:#e6e6e6;font-weight:700;" : ""
       }">
-        <div style="padding:4px 12px;border-right:1px solid #000;min-width:0;overflow-wrap:break-word;word-break:break-word;display:flex;align-items:center;justify-content:space-between;gap:6px;">
-          <span style="overflow-wrap:break-word;word-break:break-word;">${line.label}</span>
-          ${matched ? `<span style="font-size:10px;flex-shrink:0;">✓</span>` : ""}
+        <div style="padding:3px 10px;border-right:1px solid #000;min-width:0;display:flex;align-items:center;gap:6px;">
+          <span style="flex:1;min-width:0;overflow-wrap:break-word;word-break:break-word;">${line.label}</span>
+          ${matched ? `<span style="font-size:11px;flex-shrink:0;">✓</span>` : ""}
         </div>
-        <div style="padding:4px 12px;min-width:0;overflow-wrap:break-word;word-break:break-word;">${line.range}</div>
+        <div style="padding:3px 10px;min-width:0;overflow-wrap:break-word;word-break:break-word;">${line.range}</div>
       </div>`;
     })
     .join("");
@@ -285,19 +285,19 @@ function Section({ sectionName, sectionData, index, showHeader, smart = true }) 
     <table className="w-full border-collapse">
       <thead>
         <tr className="bg-gray-100 border-b border-black">
-          <th className="pl-4 pr-3 py-1.5 text-left text-[10px] font-bold text-black uppercase tracking-wider border-r border-black w-[34%]">
+          <th className="pl-4 pr-3 py-1.5 text-left text-[10px] font-bold text-black uppercase tracking-wider border-r border-black w-[22%]">
             Parameter
           </th>
-          <th className="px-3 py-1.5 text-left text-[10px] font-bold text-black uppercase tracking-wider border-r border-black w-[16%]">
+          <th className="px-3 py-1.5 text-left text-[10px] font-bold text-black uppercase tracking-wider border-r border-black w-[13%]">
             Result
           </th>
           {hasUnits && (
-            <th className="px-3 py-1.5 text-left text-[10px] font-bold text-black uppercase tracking-wider border-r border-black w-[12%]">
+            <th className="px-3 py-1.5 text-left text-[10px] font-bold text-black uppercase tracking-wider border-r border-black w-[9%]">
               Unit
             </th>
           )}
           <th
-            className={`px-3 py-1.5 text-left text-[10px] font-bold text-black uppercase tracking-wider w-[24%] ${
+            className={`px-3 py-1.5 text-left text-[10px] font-bold text-black uppercase tracking-wider w-[38%] ${
               hasStatus ? "border-r border-black" : ""
             }`}
           >
@@ -402,7 +402,7 @@ function buildPrintHTML({ reportName, shortId, patient, labInfo, sections, print
     const hasStatus = smart && entries.some(([, v]) => hasEvaluableStatus(v));
 
     const unitHeader = hasUnits
-      ? `<th class="py-[5px] px-3 text-left text-[9px] font-bold text-black uppercase tracking-[0.05em] border-r border-black w-[12%]">Unit</th>`
+      ? `<th class="py-[5px] px-3 text-left text-[9px] font-bold text-black uppercase tracking-[0.05em] border-r border-black w-[9%]">Unit</th>`
       : "";
     const statusHeader = hasStatus
       ? `<th class="py-[5px] px-3 text-left text-[9px] font-bold text-black uppercase tracking-[0.05em] w-[18%]">Status</th>`
@@ -449,10 +449,10 @@ function buildPrintHTML({ reportName, shortId, patient, labInfo, sections, print
       <table class="w-full border-collapse">
         <thead>
           <tr class="bg-gray-100 border-b border-black">
-            <th class="py-[5px] px-3 text-left text-[9px] font-bold text-black uppercase tracking-[0.05em] border-r border-black w-[34%]">Parameter</th>
-            <th class="py-[5px] px-3 text-left text-[9px] font-bold text-black uppercase tracking-[0.05em] border-r border-black w-[16%]">Result</th>
+            <th class="py-[5px] px-3 text-left text-[9px] font-bold text-black uppercase tracking-[0.05em] border-r border-black w-[22%]">Parameter</th>
+            <th class="py-[5px] px-3 text-left text-[9px] font-bold text-black uppercase tracking-[0.05em] border-r border-black w-[13%]">Result</th>
             ${unitHeader}
-            <th class="py-[5px] px-3 text-left text-[9px] font-bold text-black uppercase tracking-[0.05em] ${hasStatus ? "border-r border-black" : ""} w-[24%]">Ref. Range</th>
+            <th class="py-[5px] px-3 text-left text-[9px] font-bold text-black uppercase tracking-[0.05em] ${hasStatus ? "border-r border-black" : ""} w-[38%]">Ref. Range</th>
             ${statusHeader}
           </tr>
         </thead>

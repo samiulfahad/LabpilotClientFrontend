@@ -23,6 +23,36 @@ const getErrorMessage = (err, fallback) => {
 // ── Axios‑native network error detection (same as all other pages) ──────────
 const isNetworkError = (err) => err?.isAxiosError === true && !err.response;
 
+// ─── Lab range / unit overrides ─────────────────────────────────────────────
+// Same logic as applyOverrides in RangeOverridesPanel.jsx (kept local so this
+// page doesn't import that whole panel component). Overrides are entries of
+// { schemaId, sectionName, fieldName, standardRange?, referenceValue?, unit? }
+// holding only the keys the lab changed. Effective value = override ?? admin
+// default, so a test with no overrides returns the schema untouched.
+const applyOverrides = (schema, overrides) => {
+  if (!schema || !Array.isArray(overrides) || overrides.length === 0) return schema;
+  const find = (secName, fieldName) =>
+    overrides.find(
+      (o) => String(o.schemaId) === String(schema._id) && o.sectionName === secName && o.fieldName === fieldName,
+    );
+  return {
+    ...schema,
+    sections: (schema.sections ?? []).map((sec) => ({
+      ...sec,
+      fields: (sec.fields ?? []).map((f) => {
+        const o = find(sec.name, f.name);
+        if (!o) return f;
+        return {
+          ...f,
+          ...(o.standardRange !== undefined ? { standardRange: o.standardRange } : {}),
+          ...(o.referenceValue !== undefined ? { referenceValue: o.referenceValue } : {}),
+          ...(o.unit !== undefined ? { unit: o.unit } : {}),
+        };
+      }),
+    })),
+  };
+};
+
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
 
 const Shimmer = ({ className = "" }) => <div className={`bg-slate-200 rounded-md animate-pulse ${className}`} />;
@@ -177,7 +207,10 @@ function ReportUploadInner() {
           setExistingReport(data.report);
         }
         const schemaRes = await reportService.getTestSchema(data.schemaId);
-        setSchema(schemaRes.data);
+        // Lab's custom ranges/units (if any) replace the admin defaults
+        // BEFORE the schema reaches SchemaRenderer, so the form, the
+        // range badges and the saved report payload all use them.
+        setSchema(applyOverrides(schemaRes.data, data.overrides));
       } else {
         const { data } = await reportService.getReport(invoiceId, testId);
         setResolvedName(data.testName ?? stateTestName ?? "Report");
@@ -186,7 +219,7 @@ function ReportUploadInner() {
           setExistingReport(data.report);
         }
         const schemaRes = await reportService.getTestSchema(data.schemaId);
-        setSchema(schemaRes.data);
+        setSchema(applyOverrides(schemaRes.data, data.overrides));
       }
     } catch (e) {
       setLoadFailed(true);
