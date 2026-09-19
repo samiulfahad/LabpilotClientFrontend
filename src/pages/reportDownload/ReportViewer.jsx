@@ -16,6 +16,7 @@ import {
   Check,
   FileText,
   Loader2,
+  Sparkles,
 } from "lucide-react";
 import { ReportPDFDocument } from "./ReportPDF";
 
@@ -109,13 +110,9 @@ function RefKeyValueBox({ groups }) {
             {line.label}
           </div>
         ) : (
-          <div
-            key={i}
-            className={`px-3 py-2 text-[11px] font-bold text-black text-center leading-snug ${
-              i > 0 ? "border-t border-black" : ""
-            }`}
-          >
-            {line.key} : {line.value}
+          <div key={i} className={`grid grid-cols-2 text-[11px] leading-snug ${i > 0 ? "border-t border-black" : ""}`}>
+            <span className="px-3 py-2 border-r border-black text-black break-words min-w-0">{line.key}</span>
+            <span className="px-3 py-2 text-black break-words min-w-0">{line.value}</span>
           </div>
         ),
       )}
@@ -142,12 +139,13 @@ function flattenTierGroups(groups) {
 // present. Every group defined on the field's standard range is shown,
 // with the row the patient's actual value landed in getting a neutral
 // gray fill, bold text, and a plain tick mark next to the tier name.
-function RefTierBox({ groups }) {
+function RefTierBox({ groups, smart = true }) {
   const lines = flattenTierGroups(groups);
   return (
     <div className="w-full">
-      {lines.map((line, i) =>
-        line.type === "header" ? (
+      {lines.map((line, i) => {
+        const matched = smart && line.matched;
+        return line.type === "header" ? (
           <div
             key={i}
             className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-black text-center bg-gray-100 ${
@@ -160,21 +158,23 @@ function RefTierBox({ groups }) {
           <div
             key={i}
             className={`grid grid-cols-2 text-[11px] leading-snug ${i > 0 ? "border-t border-black" : ""} ${
-              line.matched ? "bg-gray-200" : ""
+              matched ? "bg-gray-200" : ""
             }`}
           >
             <span
-              className={`px-3 py-1 border-r border-black text-black flex items-center justify-between gap-1 ${
-                line.matched ? "font-bold" : ""
+              className={`px-3 py-1 border-r border-black text-black flex items-center justify-between gap-1 break-words min-w-0 ${
+                matched ? "font-bold" : ""
               }`}
             >
-              {line.label}
-              {line.matched && <Check className="w-3 h-3 flex-shrink-0" />}
+              <span className="break-words">{line.label}</span>
+              {matched && <Check className="w-3 h-3 flex-shrink-0" />}
             </span>
-            <span className={`px-3 py-1 text-black ${line.matched ? "font-bold" : ""}`}>{line.range}</span>
+            <span className={`px-3 py-1 text-black break-words min-w-0 ${matched ? "font-bold" : ""}`}>
+              {line.range}
+            </span>
           </div>
-        ),
-      )}
+        );
+      })}
     </div>
   );
 }
@@ -188,13 +188,16 @@ function refKeyValueRowsHtml(groups) {
       if (line.type === "header") {
         return `<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:#000;text-align:center;padding:4px 12px;background:#f3f4f6;${borderTop}">${line.label}</div>`;
       }
-      return `<div style="font-size:10px;font-weight:700;color:#000;text-align:center;padding:6px 12px;${borderTop}">${line.key} : ${line.value}</div>`;
+      return `<div style="display:grid;grid-template-columns:1fr 1fr;font-size:10px;color:#000;min-width:0;${borderTop}">
+        <div style="padding:6px 12px;border-right:1px solid #000;min-width:0;overflow-wrap:break-word;word-break:break-word;">${line.key}</div>
+        <div style="padding:6px 12px;min-width:0;overflow-wrap:break-word;word-break:break-word;">${line.value}</div>
+      </div>`;
     })
     .join("");
 }
 
 // Print-HTML string equivalent of RefTierBox.
-function refTierRowsHtml(groups) {
+function refTierRowsHtml(groups, smart = true) {
   const lines = flattenTierGroups(groups);
   return lines
     .map((line, i) => {
@@ -202,14 +205,15 @@ function refTierRowsHtml(groups) {
       if (line.type === "header") {
         return `<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:#000;text-align:center;padding:4px 12px;background:#f3f4f6;${borderTop}">${line.label}</div>`;
       }
-      return `<div style="display:grid;grid-template-columns:1fr 1fr;font-size:10px;color:#000;${borderTop}${
-        line.matched ? "background:#e6e6e6;font-weight:700;" : ""
+      const matched = smart && line.matched;
+      return `<div style="display:grid;grid-template-columns:1fr 1fr;font-size:10px;color:#000;min-width:0;${borderTop}${
+        matched ? "background:#e6e6e6;font-weight:700;" : ""
       }">
-        <div style="padding:4px 12px;border-right:1px solid #000;display:flex;align-items:center;justify-content:space-between;gap:6px;">
-          <span>${line.label}</span>
-          ${line.matched ? `<span style="font-size:10px;">✓</span>` : ""}
+        <div style="padding:4px 12px;border-right:1px solid #000;min-width:0;overflow-wrap:break-word;word-break:break-word;display:flex;align-items:center;justify-content:space-between;gap:6px;">
+          <span style="overflow-wrap:break-word;word-break:break-word;">${line.label}</span>
+          ${matched ? `<span style="font-size:10px;flex-shrink:0;">✓</span>` : ""}
         </div>
-        <div style="padding:4px 12px;">${line.range}</div>
+        <div style="padding:4px 12px;min-width:0;overflow-wrap:break-word;word-break:break-word;">${line.range}</div>
       </div>`;
     })
     .join("");
@@ -232,7 +236,7 @@ function StatusBox({ status, label }) {
   );
 }
 
-function ParamRow({ name, field, hasUnits, hasStatus, isAlt }) {
+function ParamRow({ name, field, hasUnits, hasStatus, isAlt, smart }) {
   const value = formatValue(field);
   const unit = field.unit || "";
   const tierGroups = Array.isArray(field.referenceTiers) && field.referenceTiers.length ? field.referenceTiers : null;
@@ -255,7 +259,7 @@ function ParamRow({ name, field, hasUnits, hasStatus, isAlt }) {
         }`}
       >
         {tierGroups ? (
-          <RefTierBox groups={tierGroups} />
+          <RefTierBox groups={tierGroups} smart={smart} />
         ) : Array.isArray(ref) ? (
           <RefKeyValueBox groups={ref} />
         ) : (
@@ -271,11 +275,11 @@ function ParamRow({ name, field, hasUnits, hasStatus, isAlt }) {
   );
 }
 
-function Section({ sectionName, sectionData, index, showHeader }) {
+function Section({ sectionName, sectionData, index, showHeader, smart = true }) {
   const [collapsed, setCollapsed] = useState(false);
   const entries = getSectionEntries(sectionData);
   const hasUnits = entries.some(([, v]) => Boolean(v.unit));
-  const hasStatus = entries.some(([, v]) => hasEvaluableStatus(v));
+  const hasStatus = smart && entries.some(([, v]) => hasEvaluableStatus(v));
 
   const tableBody = (
     <table className="w-full border-collapse">
@@ -308,7 +312,15 @@ function Section({ sectionName, sectionData, index, showHeader }) {
       </thead>
       <tbody>
         {entries.map(([n, f], i) => (
-          <ParamRow key={n} name={n} field={f} hasUnits={hasUnits} hasStatus={hasStatus} isAlt={i % 2 === 1} />
+          <ParamRow
+            key={n}
+            name={n}
+            field={f}
+            hasUnits={hasUnits}
+            hasStatus={hasStatus}
+            isAlt={i % 2 === 1}
+            smart={smart}
+          />
         ))}
       </tbody>
     </table>
@@ -373,7 +385,7 @@ function PatientGrid({ patient, isIndoor }) {
 // Deliberately monochrome: black text, black rules, white paper. Status is
 // shown as a bordered box with bold text, whatever label was typed for the
 // matched tier — no color, no automatic low/high guessing, no shading.
-function buildPrintHTML({ reportName, shortId, patient, labInfo, sections, printType, isIndoor }) {
+function buildPrintHTML({ reportName, shortId, patient, labInfo, sections, printType, isIndoor, smart = true }) {
   const isPad = printType === "PAD";
   const padHeightMm = labInfo.padHeight > 0 ? labInfo.padHeight : DEFAULT_PAD_HEIGHT_MM;
 
@@ -387,7 +399,7 @@ function buildPrintHTML({ reportName, shortId, patient, labInfo, sections, print
     const showHeader = sectionData.__showTitle !== false;
     const entries = getSectionEntries(sectionData);
     const hasUnits = entries.some(([, v]) => Boolean(v.unit));
-    const hasStatus = entries.some(([, v]) => hasEvaluableStatus(v));
+    const hasStatus = smart && entries.some(([, v]) => hasEvaluableStatus(v));
 
     const unitHeader = hasUnits
       ? `<th class="py-[5px] px-3 text-left text-[9px] font-bold text-black uppercase tracking-[0.05em] border-r border-black w-[12%]">Unit</th>`
@@ -404,7 +416,7 @@ function buildPrintHTML({ reportName, shortId, patient, labInfo, sections, print
           Array.isArray(field.referenceTiers) && field.referenceTiers.length ? field.referenceTiers : null;
         const ref = tierGroups ? null : getRefDisplay(field);
         const refHtml = tierGroups
-          ? refTierRowsHtml(tierGroups)
+          ? refTierRowsHtml(tierGroups, smart)
           : Array.isArray(ref)
             ? refKeyValueRowsHtml(ref)
             : ref || "—";
@@ -509,7 +521,7 @@ function buildPrintHTML({ reportName, shortId, patient, labInfo, sections, print
 <title>${reportName}</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
-  @page { size: A4; margin: 14mm; }
+  @page { size: A4; margin: 15mm; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 </style>
 </head>
@@ -550,6 +562,12 @@ function ReportViewer({
 }) {
   const [dlStatus, setDlStatus] = useState("idle");
   const [shareStatus, setShareStatus] = useState("idle");
+  // "smart" (default): number fields are labeled from their matched
+  // comparison tier, shown in a Status column, with the matched
+  // reference row ticked. "classic": the Status column and tick marks
+  // are hidden — just the raw result and the plain reference table.
+  const [mode, setMode] = useState("smart");
+  const smart = mode === "smart";
 
   const resolvedPatient = patient ?? EMPTY_PATIENT;
   const isPad = printType === "PAD";
@@ -572,6 +590,7 @@ function ReportViewer({
         labInfo={labInfo}
         isIndoor={isIndoor}
         isPad={isPad}
+        smart={smart}
       />,
     ).toBlob();
 
@@ -584,6 +603,7 @@ function ReportViewer({
       sections,
       printType,
       isIndoor,
+      smart,
     });
 
     const existing = document.getElementById("ur-print-frame");
@@ -686,28 +706,49 @@ function ReportViewer({
     <div className="max-w-2xl mx-auto font-sans">
       {/* Toolbar — unchanged from before, not part of the printed/PDF
           report, keeps its normal interactive styling. */}
-      <div className="flex items-center justify-end gap-2 mb-3">
-        <button
-          onClick={handleShare}
-          disabled={shareStatus === "loading"}
-          className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-600 bg-white border border-slate-200 rounded-lg hover:border-slate-400 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-        >
-          {shIcon} {shLabel}
-        </button>
-        <button
-          onClick={handlePrint}
-          className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-600 bg-white border border-slate-200 rounded-lg hover:border-slate-400 transition-all"
-        >
-          <Printer className="w-3.5 h-3.5" />
-          {isPad ? "Print (Pad)" : "Print (Plain A4)"}
-        </button>
-        <button
-          onClick={handleDownload}
-          disabled={dlStatus === "loading"}
-          className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-slate-800 rounded-lg hover:bg-slate-700 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-        >
-          {dlIcon} {dlLabel}
-        </button>
+      <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+        <div className="flex items-center gap-0.5 p-0.5 bg-slate-100 border border-slate-200 rounded-lg">
+          <button
+            onClick={() => setMode("classic")}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
+              mode === "classic" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            Classic
+          </button>
+          <button
+            onClick={() => setMode("smart")}
+            className={`flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
+              mode === "smart" ? "bg-white text-violet-700 shadow-sm" : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            <Sparkles className="w-3 h-3" />
+            Smart
+          </button>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleShare}
+            disabled={shareStatus === "loading"}
+            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-600 bg-white border border-slate-200 rounded-lg hover:border-slate-400 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {shIcon} {shLabel}
+          </button>
+          <button
+            onClick={handlePrint}
+            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-600 bg-white border border-slate-200 rounded-lg hover:border-slate-400 transition-all"
+          >
+            <Printer className="w-3.5 h-3.5" />
+            {isPad ? "Print (Pad)" : "Print (Plain A4)"}
+          </button>
+          <button
+            onClick={handleDownload}
+            disabled={dlStatus === "loading"}
+            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-slate-800 rounded-lg hover:bg-slate-700 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {dlIcon} {dlLabel}
+          </button>
+        </div>
       </div>
 
       {/* Report body — doc-style monochrome layout: black rules, black
@@ -767,6 +808,7 @@ function ReportViewer({
               sectionData={sectionData}
               index={i}
               showHeader={sectionData.__showTitle !== false}
+              smart={smart}
             />
           ))}
         </div>

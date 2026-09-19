@@ -12,7 +12,10 @@ const ALT_BG = "#f8f8f8";
 const ABNORMAL_BG = "#e6e6e6"; // used for the matched-tier row inside RefTierBoxPDF
 
 const s = StyleSheet.create({
-  page: { fontFamily: "Helvetica", fontSize: 9, color: BLACK, padding: 28, paddingBottom: 92 },
+  // 42pt ≈ 15mm on all sides, matching the print/HTML view's @page margin;
+  // paddingBottom keeps the same extra room reserved for the fixed footer
+  // (64pt) on top of that standard margin.
+  page: { fontFamily: "Helvetica", fontSize: 9, color: BLACK, padding: 42, paddingBottom: 106 },
 
   letterhead: {
     flexDirection: "row",
@@ -231,13 +234,32 @@ function RefKeyValueBoxPDF({ groups }) {
             key={i}
             style={{
               borderTop: i > 0 ? `1 solid ${LINE}` : undefined,
-              paddingVertical: 4,
-              paddingHorizontal: 6,
+              flexDirection: "row",
             }}
           >
-            <Text style={{ fontSize: 7, fontFamily: "Helvetica-Bold", color: BLACK, textAlign: "center" }}>
-              {line.key} : {line.value}
-            </Text>
+            <View
+              style={{
+                flexBasis: 0,
+                flexGrow: 1,
+                flexShrink: 1,
+                borderRight: `1 solid ${LINE}`,
+                paddingVertical: 4,
+                paddingHorizontal: 6,
+              }}
+            >
+              <Text style={{ fontSize: 7, fontFamily: "Helvetica", color: BLACK }}>{line.key}</Text>
+            </View>
+            <View
+              style={{
+                flexBasis: 0,
+                flexGrow: 1,
+                flexShrink: 1,
+                paddingVertical: 4,
+                paddingHorizontal: 6,
+              }}
+            >
+              <Text style={{ fontSize: 7, fontFamily: "Helvetica", color: BLACK }}>{line.value}</Text>
+            </View>
           </View>
         ),
       )}
@@ -250,12 +272,13 @@ function RefKeyValueBoxPDF({ groups }) {
 // patient's actual value landed in getting ABNORMAL_BG's neutral gray
 // fill, bold text, and a plain tick mark next to the tier name —
 // grayscale only, matching this report's black-ink-on-white-paper theme.
-function RefTierBoxPDF({ groups }) {
+function RefTierBoxPDF({ groups, smart = true }) {
   const lines = flattenTierGroups(groups);
   return (
     <View style={{ width: "100%" }}>
-      {lines.map((line, i) =>
-        line.type === "header" ? (
+      {lines.map((line, i) => {
+        const matched = smart && line.matched;
+        return line.type === "header" ? (
           <View
             key={i}
             style={{
@@ -282,7 +305,7 @@ function RefTierBoxPDF({ groups }) {
             key={i}
             style={{
               borderTop: i > 0 ? `1 solid ${LINE}` : undefined,
-              backgroundColor: line.matched ? ABNORMAL_BG : undefined,
+              backgroundColor: matched ? ABNORMAL_BG : undefined,
               flexDirection: "row",
             }}
           >
@@ -300,10 +323,10 @@ function RefTierBoxPDF({ groups }) {
                 gap: 4,
               }}
             >
-              <Text style={{ fontSize: 7, fontFamily: line.matched ? "Helvetica-Bold" : "Helvetica", color: BLACK }}>
+              <Text style={{ fontSize: 7, fontFamily: matched ? "Helvetica-Bold" : "Helvetica", color: BLACK }}>
                 {line.label}
               </Text>
-              {line.matched && <Text style={{ fontSize: 7, fontFamily: "Helvetica-Bold", color: BLACK }}>✓</Text>}
+              {matched && <Text style={{ fontSize: 7, fontFamily: "Helvetica-Bold", color: BLACK }}>✓</Text>}
             </View>
             <View
               style={{
@@ -314,23 +337,23 @@ function RefTierBoxPDF({ groups }) {
                 paddingHorizontal: 6,
               }}
             >
-              <Text style={{ fontSize: 7, fontFamily: line.matched ? "Helvetica-Bold" : "Helvetica", color: BLACK }}>
+              <Text style={{ fontSize: 7, fontFamily: matched ? "Helvetica-Bold" : "Helvetica", color: BLACK }}>
                 {line.range}
               </Text>
             </View>
           </View>
-        ),
-      )}
+        );
+      })}
     </View>
   );
 }
 
-function PDFSection({ sectionName, sectionData, index, showHeader }) {
+function PDFSection({ sectionName, sectionData, index, showHeader, smart = true }) {
   const entries = getSectionEntries(sectionData);
   const resultEntries = entries.filter(([, v]) => isResultField(v));
   const plainEntries = entries.filter(([, v]) => !isResultField(v));
   const hasUnits = resultEntries.some(([, v]) => Boolean(v.unit));
-  const hasStatus = resultEntries.some(([, v]) => hasEvaluableStatus(v));
+  const hasStatus = smart && resultEntries.some(([, v]) => hasEvaluableStatus(v));
 
   const W = hasUnits
     ? hasStatus
@@ -341,7 +364,7 @@ function PDFSection({ sectionName, sectionData, index, showHeader }) {
       : { param: 38, result: 22, ref: 40 };
 
   return (
-    <View style={s.sectionWrap} wrap={false}>
+    <View style={s.sectionWrap}>
       {showHeader && (
         <View style={s.sectionHead}>
           <View style={s.sectionBadge}>
@@ -369,13 +392,13 @@ function PDFSection({ sectionName, sectionData, index, showHeader }) {
             const refIsKV = !tierGroups && Array.isArray(ref);
             const status = getStatus(field);
             return (
-              <View key={name} style={[s.tableRow, i % 2 === 1 && s.tableRowAlt]} wrap={false}>
+              <View key={name} style={[s.tableRow, i % 2 === 1 && s.tableRowAlt]} wrap={!(tierGroups || refIsKV)}>
                 <Text style={[s.td, colFlex(W.param)]}>{name}</Text>
                 <Text style={[s.td, s.tdBold, colFlex(W.result)]}>{value || "—"}</Text>
                 {hasUnits && <Text style={[s.td, s.tdMuted, colFlex(W.unit)]}>{unit || "—"}</Text>}
                 {tierGroups ? (
                   <View style={[hasStatus ? s.td : s.tdLast, colFlex(W.ref), { padding: 0 }]}>
-                    <RefTierBoxPDF groups={tierGroups} />
+                    <RefTierBoxPDF groups={tierGroups} smart={smart} />
                   </View>
                 ) : refIsKV ? (
                   <View style={[hasStatus ? s.td : s.tdLast, colFlex(W.ref), { padding: 0 }]}>
@@ -401,17 +424,17 @@ function PDFSection({ sectionName, sectionData, index, showHeader }) {
             const val = Array.isArray(field.value) ? field.value.join(", ") : String(field.value ?? "—");
             const isKV = Array.isArray(field.referenceValue);
             return (
-              <View key={name} style={[s.tableRow, i % 2 === 1 && s.tableRowAlt]} wrap={false}>
+              <View key={name} style={[s.tableRow, i % 2 === 1 && s.tableRowAlt]} wrap={!isKV}>
                 <Text style={[s.td, colFlex(32)]}>{name}</Text>
                 {isKV ? (
-                  <View style={{ flex: 1, flexDirection: "row", alignItems: "center" }}>
+                  <View style={{ ...colFlex(68), flexDirection: "row", alignItems: "flex-start" }}>
                     <Text style={[s.tdBold, { fontSize: 9, color: BLACK, padding: "5 8" }]}>{val || "—"}</Text>
                     <View style={{ flex: 1 }}>
                       <RefKeyValueBoxPDF groups={field.referenceValue} />
                     </View>
                   </View>
                 ) : (
-                  <View style={{ flex: 1, flexDirection: "row", alignItems: "center", padding: "5 8" }}>
+                  <View style={{ ...colFlex(68), flexDirection: "row", alignItems: "center", padding: "5 8" }}>
                     <Text style={[s.tdBold, { fontSize: 9, color: BLACK }]}>{val || "—"}</Text>
                   </View>
                 )}
@@ -424,7 +447,16 @@ function PDFSection({ sectionName, sectionData, index, showHeader }) {
   );
 }
 
-export function ReportPDFDocument({ report, reportName, shortId, patient, labInfo, isIndoor = false, isPad = false }) {
+export function ReportPDFDocument({
+  report,
+  reportName,
+  shortId,
+  patient,
+  labInfo,
+  isIndoor = false,
+  isPad = false,
+  smart = true,
+}) {
   const sections = Object.entries(report).filter(
     ([key, val]) =>
       !REPORT_META_KEYS.has(key) && val !== null && typeof val === "object" && !Array.isArray(val) && !val.$oid,
@@ -495,6 +527,7 @@ export function ReportPDFDocument({ report, reportName, shortId, patient, labInf
             sectionData={sectionData}
             index={i}
             showHeader={sectionData.__showTitle !== false}
+            smart={smart}
           />
         ))}
 

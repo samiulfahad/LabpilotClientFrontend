@@ -20,9 +20,11 @@ import {
   CheckCircle2,
   AlertCircle,
   Banknote,
+  Coins,
   Percent,
   AlertTriangle,
   Layers,
+  CircleSlash,
 } from "lucide-react";
 import Modal from "../../../components/modal";
 import testService from "../../../api/test";
@@ -51,10 +53,19 @@ const C = {
 const pageGradientBg = "bg-[radial-gradient(ellipse_120%_80%_at_50%_-10%,#eef2ff_0%,#f8fafc_45%,#f8fafc_100%)]";
 
 const UNCATEGORIZED_ID = "uncategorized";
-const STATUS_OPTIONS = [
+
+// Configuration semantics
+// ───────────────────────
+// A test is CONFIGURED as soon as a price is set. Commission ৳0 is a
+// legitimate, deliberate value (plenty of tests pay no referrer cut), so it
+// never marks a test incomplete — it's surfaced as its own filter/stat
+// instead, for labs that want to audit which tests still pay nothing.
+const CONFIG_OPTIONS = [
   { value: "all", label: "সব" },
-  { value: "online", label: "অনলাইন" },
-  { value: "offline", label: "অফলাইন" },
+  { value: "priceSet", label: "মূল্য নির্ধারিত" },
+  { value: "priceUnset", label: "মূল্য বাকি" },
+  { value: "commissionSet", label: "কমিশন নির্ধারিত" },
+  { value: "commissionZero", label: "শূন্য কমিশন" },
 ];
 
 // Debounce (ms) before firing GET /test/manual/check-duplicate as the user
@@ -117,7 +128,7 @@ const AMOUNT_FIELD_CONFIG = {
   },
   commission: {
     label: "কমিশন পরিবর্তন",
-    icon: Percent,
+    icon: Coins,
     accent: "#8B5CF6",
     accentDark: "#7C3AED",
     headerBg: "linear-gradient(135deg,#F5F3FF,#EDE9FE)",
@@ -230,6 +241,11 @@ const AmountModal = ({ field, test, onClose, onSave, onNetworkError }) => {
                 onWheel={blockWheelChange}
               />
             </div>
+            {field === "commission" && (
+              <p className="mt-2 font-['IBM_Plex_Mono',monospace] text-[10.5px] text-[#94A3B8]">
+                ৳০ দিলে এই টেস্টে কোনো কমিশন থাকবে না — এটি বৈধ।
+              </p>
+            )}
             {exceedsCounterpart && (
               <p className="mt-2 font-['IBM_Plex_Mono',monospace] text-[11px] text-[#EF4444]">
                 {field === "price"
@@ -455,7 +471,7 @@ const ManualAddTestModal = ({ initialName, onClose, onAdded, onNetworkError }) =
               </div>
               <div>
                 <label className="flex items-center gap-1 mb-1.5 font-['IBM_Plex_Mono',monospace] text-[9px] font-bold uppercase tracking-[0.08em] text-[#8B5CF6]">
-                  <Percent className="w-3 h-3" /> কমিশন
+                  <Coins className="w-3 h-3" /> কমিশন
                 </label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 font-['IBM_Plex_Mono',monospace] text-xs font-bold text-[#8B5CF6]">
@@ -481,6 +497,9 @@ const ManualAddTestModal = ({ initialName, onClose, onAdded, onNetworkError }) =
                 </div>
               </div>
             </div>
+            <p className="mt-2 font-['IBM_Plex_Mono',monospace] text-[10.5px] text-[#94A3B8]">
+              কমিশন ঐচ্ছিক — খালি রাখলে ৳০ ধরা হবে।
+            </p>
             {exceedsPrice && (
               <p className="mt-2 font-['IBM_Plex_Mono',monospace] text-[10.5px] text-[#EF4444]">
                 কমিশন মূল্যের চেয়ে বেশি হতে পারবে না।
@@ -861,7 +880,7 @@ const AddTestModal = ({ existingTests, onClose, onSaved, onNetworkError }) => {
                                   </div>
                                   <div>
                                     <label className="flex items-center gap-1 mb-1.5 font-['IBM_Plex_Mono',monospace] text-[9px] font-bold uppercase tracking-[0.08em] text-[#8B5CF6]">
-                                      <Percent className="w-3 h-3" /> কমিশন
+                                      <Coins className="w-3 h-3" /> কমিশন
                                     </label>
                                     <div className="relative">
                                       <span className="absolute left-3 top-1/2 -translate-y-1/2 font-['IBM_Plex_Mono',monospace] text-xs font-bold text-[#8B5CF6]">
@@ -981,12 +1000,32 @@ const Avatar = ({ name }) => {
   );
 };
 
+// Compact amount chip shown right beside the test name — visible without
+// expanding the card. Price uses teal when set / amber "বাকি" when not;
+// commission uses the Coins icon (never Percent) since it's a flat ৳
+// amount, not a rate — and always shows the value, including ৳0.
+const AmountChip = ({ icon: Icon, amount, set, unsetLabel, color }) => (
+  <span
+    className="shrink-0 inline-flex items-center gap-1 px-1.5 py-[2px] rounded-[6px] font-['IBM_Plex_Mono',monospace] text-[10px] font-bold"
+    style={{
+      color: set ? color : C.amber,
+      background: set ? `${color}0C` : `${C.amber}0C`,
+      border: `1px solid ${set ? color : C.amber}25`,
+    }}
+  >
+    <Icon className="w-2.5 h-2.5" />
+    {set ? `৳${amount.toLocaleString("en-IN")}` : unsetLabel}
+  </span>
+);
+
 const TestCard = ({ test, onConfigurePrice, onConfigureCommission, onDelete }) => {
   const [expanded, setExpanded] = useState(false);
-  const statusGrad = test.isOnline
+  // Configured === price set. Commission ৳0 is valid and does not downgrade
+  // the badge.
+  const statusGrad = test.isConfigured
     ? "linear-gradient(135deg,#10B981,#059669)"
     : "linear-gradient(135deg,#F59E0B,#D97706)";
-  const statusShadow = test.isOnline ? "shadow-[0_3px_8px_#10B98130]" : "shadow-[0_3px_8px_#F59E0B30]";
+  const statusShadow = test.isConfigured ? "shadow-[0_3px_8px_#10B98130]" : "shadow-[0_3px_8px_#F59E0B30]";
 
   return (
     <div
@@ -998,26 +1037,34 @@ const TestCard = ({ test, onConfigurePrice, onConfigureCommission, onDelete }) =
           <Avatar name={test.name} />
 
           <div className="flex-1 min-w-0">
-            <span className="font-['IBM_Plex_Sans',sans-serif] text-sm font-semibold text-[#0F172A] truncate block">
-              {test.name}
-            </span>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="font-['IBM_Plex_Sans',sans-serif] text-sm font-semibold text-[#0F172A] truncate">
+                {test.name}
+              </span>
+              <AmountChip
+                icon={Banknote}
+                amount={test.price}
+                set={test.hasPrice}
+                unsetLabel="মূল্য বাকি"
+                color={C.teal}
+              />
+              <AmountChip icon={Coins} amount={test.commission} set={true} unsetLabel="" color={C.purple} />
+            </div>
             <p className="font-['IBM_Plex_Mono',monospace] text-[10.5px] text-[#94A3B8] mt-0.5 truncate">
               {test.categoryName}
             </p>
           </div>
 
-          {test.price > 0 && (
-            <span className="shrink-0 font-['IBM_Plex_Mono',monospace] text-xs font-bold text-[#0D9488]">
-              ৳{test.price.toLocaleString("en-IN")}
-            </span>
-          )}
-
           <span
             className={`shrink-0 flex items-center gap-1 px-3 py-1 rounded-[20px] text-white font-['IBM_Plex_Mono',monospace] text-[10px] font-bold ${statusShadow}`}
             style={{ background: statusGrad }}
           >
-            {test.isOnline ? <Wifi className="w-[10px] h-[10px]" /> : <WifiOff className="w-[10px] h-[10px]" />}
-            {test.isOnline ? "অনলাইন" : "অফলাইন"}
+            {test.isConfigured ? (
+              <CheckCircle2 className="w-[10px] h-[10px]" />
+            ) : (
+              <AlertTriangle className="w-[10px] h-[10px]" />
+            )}
+            {test.isConfigured ? "কনফিগার্ড" : "মূল্য বাকি"}
           </span>
 
           <ChevronDown
@@ -1032,20 +1079,26 @@ const TestCard = ({ test, onConfigurePrice, onConfigureCommission, onDelete }) =
             <div className="font-['IBM_Plex_Mono',monospace] text-xs text-[#64748B] leading-loose flex flex-wrap gap-x-4 gap-y-1">
               <span>
                 মূল্য:{" "}
-                <span className="font-bold text-[#0D9488]">
-                  {test.price > 0 ? `৳${test.price.toLocaleString("en-IN")}` : "নির্ধারিত নয়"}
+                <span className={test.hasPrice ? "font-bold text-[#0D9488]" : "font-bold text-[#F59E0B]"}>
+                  {test.hasPrice ? `৳${test.price.toLocaleString("en-IN")}` : "নির্ধারিত নয়"}
                 </span>
               </span>
               <span>
                 কমিশন:{" "}
-                <span className="font-bold text-[#8B5CF6]">
-                  {test.commission > 0 ? `৳${test.commission.toLocaleString("en-IN")}` : "নির্ধারিত নয়"}
+                <span className={test.hasCommission ? "font-bold text-[#8B5CF6]" : "font-bold text-[#64748B]"}>
+                  ৳{test.commission.toLocaleString("en-IN")}
                 </span>
               </span>
             </div>
+            {!test.hasPrice && (
+              <p className="font-['IBM_Plex_Mono',monospace] text-[10.5px] text-[#F59E0B] flex items-center gap-1.5">
+                <AlertTriangle className="w-3 h-3 shrink-0" />
+                এই টেস্টের মূল্য এখনো নির্ধারিত হয়নি
+              </p>
+            )}
             <div className="flex items-center gap-2 flex-wrap">
               <ActionChip onClick={onConfigurePrice} icon={Banknote} label="Change Price" color={C.blue} />
-              <ActionChip onClick={onConfigureCommission} icon={Percent} label="Change Commission" color={C.purple} />
+              <ActionChip onClick={onConfigureCommission} icon={Coins} label="Change Commission" color={C.purple} />
               <ActionChip onClick={onDelete} icon={Trash2} label="Delete" color={C.red} />
             </div>
           </div>
@@ -1056,16 +1109,16 @@ const TestCard = ({ test, onConfigurePrice, onConfigureCommission, onDelete }) =
 };
 
 const StatCard = ({ label, value, color, grad, icon: Icon }) => (
-  <div className="bg-white relative overflow-hidden border border-[#E2E8F0] rounded-2xl p-[14px_16px] shadow-[0_2px_8px_rgba(15,23,42,0.05)]">
+  <div className="bg-white relative overflow-hidden border border-[#E2E8F0] rounded-2xl p-[14px_16px] shadow-[0_2px_8px_rgba(15,23,42,0.05)] h-full">
     <div className="absolute top-0 right-0 w-16 h-16 opacity-5 rounded-[0_16px_0_100%]" style={{ background: grad }} />
     <div className="flex items-center gap-2 mb-2">
       <div
-        className="flex items-center justify-center w-[26px] h-[26px] rounded-lg"
+        className="flex items-center justify-center w-[26px] h-[26px] rounded-lg shrink-0"
         style={{ background: grad, boxShadow: `0 3px 8px ${color}30` }}
       >
         <Icon className="w-[13px] h-[13px] text-white" />
       </div>
-      <p className="font-['IBM_Plex_Mono',monospace] text-[9px] font-bold uppercase tracking-[0.06em] text-[#94A3B8]">
+      <p className="font-['IBM_Plex_Mono',monospace] text-[9px] font-bold uppercase tracking-[0.06em] text-[#94A3B8] leading-tight">
         {label}
       </p>
     </div>
@@ -1145,13 +1198,13 @@ const ManageTests = () => {
   const [initialLoading, setInitialLoading] = useState(true);
   const [error, setError] = useState("");
   const [popup, setPopup] = useState(null);
-  const [offlinePopup, setOfflinePopup] = useState(false); // ← new
+  const [offlinePopup, setOfflinePopup] = useState(false);
   const [addModal, setAddModal] = useState(false);
   const [priceTest, setPriceTest] = useState(null);
   const [commissionTest, setCommissionTest] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [configFilter, setConfigFilter] = useState("all");
 
   const loadAll = async () => {
     try {
@@ -1182,32 +1235,51 @@ const ManageTests = () => {
     [categories],
   );
 
+  // isConfigured tracks price only — commission ৳0 is a deliberate value, not
+  // a gap. zeroCommission is surfaced separately (stat card, filter).
   const enrichedTests = useMemo(
     () =>
-      tests.map((t) => ({
-        ...t,
-        categoryId: t.categoryId || UNCATEGORIZED_ID,
-        categoryName: t.categoryId && categoryMap[t.categoryId] ? categoryMap[t.categoryId] : "Uncategorized",
-        isOnline: !!t.schemaId,
-      })),
+      tests.map((t) => {
+        const price = Number(t.price) || 0;
+        const commission = Number(t.commission) || 0;
+        const hasPrice = price > 0;
+        const hasCommission = commission > 0;
+        return {
+          ...t,
+          price,
+          commission,
+          categoryId: t.categoryId || UNCATEGORIZED_ID,
+          categoryName: t.categoryId && categoryMap[t.categoryId] ? categoryMap[t.categoryId] : "Uncategorized",
+          hasPrice,
+          hasCommission,
+          zeroCommission: !hasCommission,
+          isConfigured: hasPrice,
+        };
+      }),
     [tests, categoryMap],
   );
 
   const stats = useMemo(
     () => ({
       total: enrichedTests.length,
-      online: enrichedTests.filter((t) => t.isOnline).length,
-      offline: enrichedTests.filter((t) => !t.isOnline).length,
-      categories: new Set(enrichedTests.map((t) => t.categoryId)).size,
+      priceSet: enrichedTests.filter((t) => t.hasPrice).length,
+      priceUnset: enrichedTests.filter((t) => !t.hasPrice).length,
+      commissionSet: enrichedTests.filter((t) => t.hasCommission).length,
+      commissionZero: enrichedTests.filter((t) => t.zeroCommission).length,
     }),
     [enrichedTests],
   );
 
   const filtered = useMemo(() => {
-    return enrichedTests
-      .filter((t) => (statusFilter === "online" ? t.isOnline : statusFilter === "offline" ? !t.isOnline : true))
-      .filter((t) => matchesSearch(t.name, search));
-  }, [enrichedTests, statusFilter, search]);
+    const byConfig = {
+      priceSet: (t) => t.hasPrice,
+      priceUnset: (t) => !t.hasPrice,
+      commissionSet: (t) => t.hasCommission,
+      commissionZero: (t) => t.zeroCommission,
+    };
+    const predicate = byConfig[configFilter] ?? (() => true);
+    return enrichedTests.filter(predicate).filter((t) => matchesSearch(t.name, search));
+  }, [enrichedTests, configFilter, search]);
 
   const groups = useMemo(() => {
     const groupsMap = {};
@@ -1276,7 +1348,7 @@ const ManageTests = () => {
     setPopup({ type: "success", message: `${added.length}টি টেস্ট যোগ করা হয়েছে।` });
   };
 
-  const hasFilters = search !== "" || statusFilter !== "all";
+  const hasFilters = search !== "" || configFilter !== "all";
 
   return (
     <section className={`min-h-screen px-4 py-6 ${pageGradientBg} font-[Noto_Sans_Bengali,sans-serif]`}>
@@ -1360,37 +1432,55 @@ const ManageTests = () => {
           </div>
         </div>
 
-        {/* Stats */}
+        {/* Stats — mobile: 6-col grid, cards span 2 (row 1, thirds) then 3 (row 2, halves);
+            sm+: collapses to a single row of 5 equal columns */}
         {!initialLoading && (
-          <div className="grid grid-cols-4 gap-3 mb-5">
-            <StatCard
-              label="Total"
-              value={stats.total}
-              color={C.teal}
-              grad="linear-gradient(135deg,#0D9488,#0F766E)"
-              icon={FlaskConical}
-            />
-            <StatCard
-              label="Online"
-              value={stats.online}
-              color={C.green}
-              grad="linear-gradient(135deg,#10B981,#059669)"
-              icon={Wifi}
-            />
-            <StatCard
-              label="Offline"
-              value={stats.offline}
-              color={C.amber}
-              grad="linear-gradient(135deg,#F59E0B,#D97706)"
-              icon={WifiOff}
-            />
-            <StatCard
-              label="বিভাগ"
-              value={stats.categories}
-              color={C.purple}
-              grad="linear-gradient(135deg,#8B5CF6,#7C3AED)"
-              icon={Layers}
-            />
+          <div className="grid grid-cols-6 sm:grid-cols-5 gap-3 mb-5">
+            <div className="col-span-2 sm:col-span-1">
+              <StatCard
+                label="Total"
+                value={stats.total}
+                color={C.teal}
+                grad="linear-gradient(135deg,#0D9488,#0F766E)"
+                icon={FlaskConical}
+              />
+            </div>
+            <div className="col-span-2 sm:col-span-1">
+              <StatCard
+                label="মূল্য সেট"
+                value={stats.priceSet}
+                color={C.green}
+                grad="linear-gradient(135deg,#10B981,#059669)"
+                icon={CheckCircle2}
+              />
+            </div>
+            <div className="col-span-2 sm:col-span-1">
+              <StatCard
+                label="মূল্য বাকি"
+                value={stats.priceUnset}
+                color={C.amber}
+                grad="linear-gradient(135deg,#F59E0B,#D97706)"
+                icon={AlertTriangle}
+              />
+            </div>
+            <div className="col-span-3 sm:col-span-1">
+              <StatCard
+                label="কমিশন সেট"
+                value={stats.commissionSet}
+                color={C.purple}
+                grad="linear-gradient(135deg,#8B5CF6,#7C3AED)"
+                icon={Coins}
+              />
+            </div>
+            <div className="col-span-3 sm:col-span-1">
+              <StatCard
+                label="শূন্য কমিশন"
+                value={stats.commissionZero}
+                color={C.sub}
+                grad="linear-gradient(135deg,#94A3B8,#64748B)"
+                icon={CircleSlash}
+              />
+            </div>
           </div>
         )}
 
@@ -1416,12 +1506,12 @@ const ManageTests = () => {
               </button>
             )}
           </div>
-          <FilterDropdown value={statusFilter} onChange={setStatusFilter} options={STATUS_OPTIONS} />
+          <FilterDropdown value={configFilter} onChange={setConfigFilter} options={CONFIG_OPTIONS} />
           {hasFilters && (
             <button
               onClick={() => {
                 setSearch("");
-                setStatusFilter("all");
+                setConfigFilter("all");
               }}
               className="flex items-center gap-1.5 transition-all font-semibold py-[7px] px-3 border-[1.5px] border-[#EF444430] rounded-[10px] text-[#EF4444] font-['IBM_Plex_Mono',monospace] text-[11px] bg-[#EF444406] hover:bg-[#EF444412]"
             >

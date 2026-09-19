@@ -13,6 +13,8 @@ import {
   Save,
   Activity,
   Tag,
+  Sparkles,
+  Check,
 } from "lucide-react";
 
 // ─── Age helpers ────────────────────────────────────────────────────────────
@@ -45,6 +47,30 @@ function formatAge(age) {
   return parts.join(", ");
 }
 
+// Sentinel the builder uses for "no upper limit" on an age bracket.
+function isAgeNoLimit(age) {
+  return !!age && Number(age.years) === 150 && Number(age.months) === 11 && Number(age.days) === 31;
+}
+
+// Compact "0y"-style formatter for an age BRACKET BOUNDARY (a standard
+// range's minAge/maxAge), as opposed to formatAge above which is only for
+// the patient's own age. A bracket starting at birth is a real, meaningful
+// boundary — formatAge would collapse {years:0,months:0,days:0} to "—"
+// since that's how it represents "no age entered", so boundaries need
+// their own formatter that always prints years (even 0) and shows "∞" for
+// the no-upper-limit sentinel, mirroring the admin builder's own display.
+function formatAgeBoundary(age) {
+  if (!age || typeof age !== "object") return "—";
+  if (isAgeNoLimit(age)) return "∞";
+  const years = age.years === "" || age.years === undefined || age.years === null ? 0 : Number(age.years);
+  const months = age.months === "" || age.months === undefined || age.months === null ? 0 : Number(age.months);
+  const days = age.days === "" || age.days === undefined || age.days === null ? 0 : Number(age.days);
+  const parts = [`${years}y`];
+  if (months) parts.push(`${months}m`);
+  if (days) parts.push(`${days}d`);
+  return parts.join(" ");
+}
+
 // ─── Range logic ─────────────────────────────────────────────────────────────
 // standardRange.data is tier-based: an array of { label, comparator, min,
 // max } (Simple), or age/gender brackets each holding such an array —
@@ -69,6 +95,42 @@ export function getStandardRangeInfo(field, patientAge, patientGender) {
 
   if (!tiers || tiers.length === 0) return null;
   return { tiers };
+}
+
+const GENDER_LABELS = { male: "Male", female: "Female", other: "Other" };
+
+// Unlike getStandardRangeInfo (which resolves only the ONE bracket/gender
+// that applies to this patient, for status evaluation), this returns EVERY
+// group defined on the field, each tagged with whether it's the patient's
+// own group — mirrors the admin renderer's getAllReferenceGroups exactly,
+// so the entry form can show the full reference table (e.g. both Male and
+// Female blocks) rather than just the single matching bracket.
+export function getAllReferenceGroups(field, patientAge, patientGender) {
+  const sr = field.standardRange;
+  if (!sr || sr.type === "none") return [];
+
+  if (sr.type === "simple") {
+    return Array.isArray(sr.data) && sr.data.length ? [{ group: null, tiers: sr.data, isPatientGroup: true }] : [];
+  }
+
+  if (sr.type === "gender" && sr.data) {
+    return ["male", "female", "other"]
+      .filter((g) => Array.isArray(sr.data[g]) && sr.data[g].length)
+      .map((g) => ({ group: GENDER_LABELS[g], tiers: sr.data[g], isPatientGroup: g === patientGender }));
+  }
+
+  if (sr.type === "age" && Array.isArray(sr.data)) {
+    const ageVal = hasAge(patientAge) ? ageToValue(patientAge) : null;
+    return sr.data
+      .filter((b) => Array.isArray(b.tiers) && b.tiers.length)
+      .map((b) => ({
+        group: `${formatAgeBoundary(b.minAge)} – ${formatAgeBoundary(b.maxAge)}`,
+        tiers: b.tiers,
+        isPatientGroup: ageVal !== null && ageVal >= ageToValue(b.minAge) && ageVal <= ageToValue(b.maxAge),
+      }));
+  }
+
+  return [];
 }
 
 function tierMatches(t, v) {
@@ -148,18 +210,89 @@ export function hydrateValuesFromReport(schema, existingReport) {
   return values;
 }
 
-// A text/textarea field's reference note — Text and Textarea are both a
-// plain string; Key-Value Pair is a list of { key, value } rows joined into
-// a single "Key: Value, Key: Value" line for display alongside the result.
+// A text/textarea field's reference note. Text and Textarea are both a
+// plain string. Key-Value Pair is stored as an array of GROUPS —
+// [{ header, pairs: [{ key, value }] }] — where `header` is optional, so
+// this returns that same grouped shape (filtered down to groups with at
+// least one non-empty pair) rather than a flattened string, letting
+// callers show every group with its own header band. Mirrors the admin
+// renderer's getReferenceValue exactly — the previous version here
+// assumed a flat { key, value } array and so silently returned nothing
+// for every Key-Value Pair reference.
 export function getReferenceValue(field) {
   const rv = field.referenceValue;
   if (!rv || rv.type === "none") return null;
   if (rv.type === "text" || rv.type === "textarea") return rv.data?.value || null;
   if (rv.type === "keyvalue" && Array.isArray(rv.data)) {
-    const pairs = rv.data.filter((p) => p.key || p.value).map((p) => `${p.key}: ${p.value}`);
-    return pairs.length ? pairs.join(", ") : null;
+    const groups = rv.data
+      .map((g) => ({
+        header: g?.header || "",
+        pairs: (g?.pairs || [])
+          .filter((p) => p.key || p.value)
+          .map((p) => ({ key: p.key || "", value: p.value || "" })),
+      }))
+      .filter((g) => g.pairs.length > 0);
+    return groups.length ? groups : null;
   }
   return null;
+}
+
+// For the compact inline footer only — flattens the grouped key-value
+// data into one readable line (e.g. "Male — Color: Straw, Odour: None ·
+// Female — Color: Pale"). The full grouped table is shown separately via
+// RefKeyValuePanel below.
+function formatRefValueInline(refValue) {
+  if (Array.isArray(refValue)) {
+    return refValue
+      .map((g) => {
+        const pairsStr = g.pairs.map((p) => `${p.key}: ${p.value}`).join(", ");
+        return g.header ? `${g.header} — ${pairsStr}` : pairsStr;
+      })
+      .join(" · ");
+  }
+  return refValue;
+}
+
+// Full reference table for a Key-Value Pair reference — every group shown
+// as its own boxed block (a header band only where a header was actually
+// given, then its key:value rows). No matched/bold/tick styling here since
+// a text/textarea reference isn't compared against anything, unlike
+// RefTierPanel's numeric tiers — this just makes every pair visible
+// instead of collapsing them into the single flattened footer line.
+function RefKeyValuePanel({ groups }) {
+  const lines = [];
+  groups.forEach((g) => {
+    if (g.header) lines.push({ type: "header", label: g.header });
+    g.pairs.forEach((p) => lines.push({ type: "row", key: p.key, value: p.value }));
+  });
+  if (!lines.length) return null;
+
+  return (
+    <div className="w-full rounded-lg border border-slate-200 overflow-hidden bg-white">
+      {lines.map((line, i) =>
+        line.type === "header" ? (
+          <div
+            key={i}
+            className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-500 text-center bg-slate-50 ${
+              i > 0 ? "border-t border-slate-200" : ""
+            }`}
+          >
+            {line.label}
+          </div>
+        ) : (
+          <div
+            key={i}
+            className={`grid grid-cols-2 text-[11px] leading-snug ${i > 0 ? "border-t border-slate-200" : ""}`}
+          >
+            <span className="px-3 py-1.5 border-r border-slate-200 text-slate-600 font-medium break-words min-w-0">
+              {line.key}
+            </span>
+            <span className="px-3 py-1.5 text-slate-600 font-medium break-words min-w-0">{line.value}</span>
+          </div>
+        ),
+      )}
+    </div>
+  );
 }
 
 // ─── Payload builder ────────────────────────────────────────────────────────
@@ -185,6 +318,25 @@ function buildPayload(schema, values, patientAge, patientGender, testName) {
             entry.referenceRange = evaluated.range;
             entry.referenceTag = evaluated.label;
           }
+          // Full reference table for this field — EVERY group defined on
+          // the standard range (both Male and Female blocks, or every age
+          // bracket), not just the one that applies to this patient. This
+          // is what ReportViewer/ReportPDF's RefTierBox renders — without
+          // it they fall back to the single referenceRange/referenceTag
+          // line and never show the full table with the matched row
+          // ticked. Mirrors the admin buildPayload exactly.
+          const groups = getAllReferenceGroups(field, patientAge, patientGender);
+          if (groups.length) {
+            const v = parseFloat(val);
+            entry.referenceTiers = groups.map((g) => ({
+              group: g.group, // null for "simple"; else "Male" / "Female" / "18y – 60y" etc.
+              rows: g.tiers.map((t) => ({
+                label: t.label,
+                range: formatTierRange(t),
+                matched: g.isPatientGroup && !isNaN(v) && tierMatches(t, v),
+              })),
+            }));
+          }
         } else if (field.type === "input" || field.type === "textarea") {
           const refValue = getReferenceValue(field);
           if (refValue) entry.referenceValue = refValue;
@@ -207,6 +359,24 @@ const EditedBadge = () => (
   </span>
 );
 
+// A "smart" field is a number field wired to a standard range — its result
+// isn't just the raw entered value, it's evaluated against comparison
+// tiers (simple/age/gender-scoped) to derive a label. Every other field
+// type is captured as-is with no comparison logic.
+function isSmartField(field) {
+  return field.type === "number" && !!field.standardRange?.type && field.standardRange.type !== "none";
+}
+
+const SmartBadge = () => (
+  <span
+    title="Smart field — the result is labeled by comparing it against configured reference ranges"
+    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-violet-50 border border-violet-200 text-violet-600 text-[10px] font-semibold shrink-0 uppercase tracking-wide"
+  >
+    <Sparkles className="w-2.5 h-2.5" />
+    Smart
+  </span>
+);
+
 // Plain tag badge — no low/high/normal styling, just the matched tier's
 // label. Mirrors the admin renderer's RangeBadge exactly.
 const RangeBadge = ({ evaluated }) => {
@@ -219,6 +389,77 @@ const RangeBadge = ({ evaluated }) => {
   );
 };
 
+// Builds the full set of reference groups for display — every group
+// defined on the field's standard range (e.g. both Male and Female
+// blocks, or every age bracket), not just the one bracket/gender that
+// applies to this patient. The row the currently-typed value falls into
+// (within the patient's own group only) is flagged `matched` so it can
+// be bolded and ticked, mirroring the admin PDF's RefTierBox exactly.
+function buildDisplayTierGroups(field, patientAge, patientGender, value) {
+  const groups = getAllReferenceGroups(field, patientAge, patientGender);
+  if (!groups.length) return [];
+  const v = parseFloat(value);
+  return groups.map((g) => ({
+    group: g.group, // null for "simple" (ungrouped); else "Male" / "Female" / "18y – 60y" etc.
+    rows: g.tiers.map((t) => ({
+      label: t.label,
+      range: formatTierRange(t),
+      matched: g.isPatientGroup && !isNaN(v) && tierMatches(t, v),
+    })),
+  }));
+}
+
+// Full reference table for a smart field — every group shown, with the
+// row the entered value falls into bolded and ticked. Mirrors the admin
+// PDF/report's RefTierBox, restyled to fit this app's violet/slate UI
+// instead of the report's monochrome black-on-white theme.
+function RefTierPanel({ groups }) {
+  const lines = [];
+  groups.forEach((g) => {
+    if (g.group) lines.push({ type: "header", label: g.group });
+    g.rows.forEach((r) => lines.push({ type: "row", ...r }));
+  });
+  if (!lines.length) return null;
+
+  return (
+    <div className="w-full rounded-lg border border-slate-200 overflow-hidden bg-white">
+      {lines.map((line, i) =>
+        line.type === "header" ? (
+          <div
+            key={i}
+            className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-500 text-center bg-slate-50 ${
+              i > 0 ? "border-t border-slate-200" : ""
+            }`}
+          >
+            {line.label}
+          </div>
+        ) : (
+          <div
+            key={i}
+            className={`grid grid-cols-2 text-[11px] leading-snug ${i > 0 ? "border-t border-slate-200" : ""} ${
+              line.matched ? "bg-violet-50" : ""
+            }`}
+          >
+            <span
+              className={`px-3 py-1.5 border-r border-slate-200 flex items-center justify-between gap-1 break-words min-w-0 ${
+                line.matched ? "font-bold text-violet-700" : "text-slate-600"
+              }`}
+            >
+              <span className="break-words">{line.label}</span>
+              {line.matched && <Check className="w-3 h-3 text-violet-600 flex-shrink-0" />}
+            </span>
+            <span
+              className={`px-3 py-1.5 break-words min-w-0 ${line.matched ? "font-bold text-violet-700" : "text-slate-600"}`}
+            >
+              {line.range}
+            </span>
+          </div>
+        ),
+      )}
+    </div>
+  );
+}
+
 const FieldError = ({ msg }) =>
   msg ? (
     <p className="flex items-center gap-1 text-xs text-red-500 mt-1.5">
@@ -230,7 +471,7 @@ const FieldError = ({ msg }) =>
 // ─── Field row shell: single pill container, prefix label box + value area ───
 // Mirrors the Uiverse "container / prefix / input" pattern exactly.
 
-function FieldRow({ field, isChanged, borderCls, footer, children }) {
+function FieldRow({ field, isChanged, borderCls, footer, smart, panel, children }) {
   return (
     <div className="flex flex-col gap-1.5 w-full">
       <div
@@ -244,12 +485,14 @@ function FieldRow({ field, isChanged, borderCls, footer, children }) {
         </span>
         {children}
       </div>
-      {(footer || isChanged) && (
+      {(footer || isChanged || smart) && (
         <div className="flex items-center gap-2 flex-wrap px-0.5">
+          {smart && <SmartBadge />}
           {isChanged && <EditedBadge />}
           {footer}
         </div>
       )}
+      {panel}
     </div>
   );
 }
@@ -272,6 +515,7 @@ function NumberField({ field, value, onChange, error, patientAge, patientGender,
   const evaluated = evaluateStatus(value, rangeInfo);
   const hasValue = value !== "" && value !== null && value !== undefined;
   const isChanged = isEditMode && originalValue !== undefined && String(value) !== String(originalValue ?? "");
+  const tierGroups = buildDisplayTierGroups(field, patientAge, patientGender, value);
 
   let borderCls = "border-slate-800";
   if (error) borderCls = "border-red-500";
@@ -289,7 +533,14 @@ function NumberField({ field, value, onChange, error, patientAge, patientGender,
     ) : null;
 
   return (
-    <FieldRow field={field} isChanged={isChanged} borderCls={borderCls} footer={footer}>
+    <FieldRow
+      field={field}
+      isChanged={isChanged}
+      borderCls={borderCls}
+      footer={footer}
+      smart={isSmartField(field)}
+      panel={tierGroups.length > 0 ? <RefTierPanel groups={tierGroups} /> : null}
+    >
       <input
         type="number"
         value={value}
@@ -430,14 +681,19 @@ function TextareaField({ field, value, onChange, error, originalValue, isEditMod
         {refValue && (
           <span className="inline-flex items-center gap-1 text-[11px] text-slate-400 font-mono">
             <Tag className="w-2.5 h-2.5 text-violet-500" />
-            {refValue}
+            {formatRefValueInline(refValue)}
           </span>
         )}
         <FieldError msg={error} />
       </>
     ) : null;
   return (
-    <FieldRow field={field} isChanged={isChanged} footer={footer}>
+    <FieldRow
+      field={field}
+      isChanged={isChanged}
+      footer={footer}
+      panel={Array.isArray(refValue) ? <RefKeyValuePanel groups={refValue} /> : null}
+    >
       <div className="flex-1 flex flex-col bg-white">
         <textarea
           value={value}
@@ -464,14 +720,19 @@ function TextInputField({ field, value, onChange, error, originalValue, isEditMo
         {refValue && (
           <span className="inline-flex items-center gap-1 text-[11px] text-slate-400 font-mono">
             <Tag className="w-2.5 h-2.5 text-violet-500" />
-            {refValue}
+            {formatRefValueInline(refValue)}
           </span>
         )}
         <FieldError msg={error} />
       </>
     ) : null;
   return (
-    <FieldRow field={field} isChanged={isChanged} footer={footer}>
+    <FieldRow
+      field={field}
+      isChanged={isChanged}
+      footer={footer}
+      panel={Array.isArray(refValue) ? <RefKeyValuePanel groups={refValue} /> : null}
+    >
       <div className="relative flex-1 flex items-center bg-white">
         <input
           type="text"

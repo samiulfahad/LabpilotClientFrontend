@@ -1,8 +1,9 @@
 import api from "./baseAPI";
 
-// Scoped to test-config concerns only: report format (schema) selection and
-// sample collection room assignment. Everything else (catalog, price,
-// commission, manual add, etc.) stays in testService.
+// Scoped to test-config concerns only: report format (schema) selection,
+// sample collection room assignment, and per-lab reference range / unit
+// overrides. Everything else (catalog, price, commission, manual add, etc.)
+// stays in testService.
 //
 // All paths carry the /test-config prefix inline (see testConfigRoutes.js —
 // routes are self-prefixed rather than registered with a fastify prefix
@@ -44,6 +45,15 @@ const testConfigService = {
   // test.
   // (PATCH /test-config/:testId/schema)
   updateSchema: (testId, schemaId) => api.patch(`/test-config/${testId}/schema`, { schemaId }),
+
+  // ── Reference range / unit overrides ─────────────────────────────────────
+  // Stored on the test at test.schema.overrides, one entry per field, keyed by
+  // sectionName + fieldName (tied to the test's attached format).
+  // payload: { sectionName, fieldName, standardRange? | referenceValue?, unit? } —
+  // only the keys that differ from the admin default. Sending none removes
+  // the field's entry.
+  // (PUT /test-config/:testId/range-override)
+  saveRangeOverride: (testId, payload) => api.put(`/test-config/${testId}/range-override`, payload),
 
   // ── Sample collection room ───────────────────────────────────────────────
   // Set (or clear, with sampleCollectionRoom: null) a single test's own room
