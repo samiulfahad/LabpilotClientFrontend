@@ -7,7 +7,7 @@
  * from. Tests are grouped in a card per category (with its default room).
  * Each test row has:
  *   - a status icon: Wifi (green) = format attached / online,
- *     WifiOff (gray) = offline. A green dot badge on it means at least one
+ *     WifiOff (gray) = offline. A green dot badg it means at least one
  *     report format is available for the test.
  *   - a blinking amber badge beside the name when formats are available but
  *     none is selected yet.
@@ -38,6 +38,13 @@
  *   stored on the test at `test.schema.overrides`.
  * - Changing (or clearing) a test's format wipes its overrides. The server
  *   does the wipe; the UI asks for confirmation first when any exist.
+ *
+ * Status filter:
+ * - "সব" / "অনলাইন" / "অফলাইন" plus a third filter, "ফরম্যাট আছে", which
+ *   narrows the list to tests that are offline but have at least one report
+ *   format available (formatCount > 0) — i.e. exactly the ones that show the
+ *   blinking PendingBadge in the row. Handy for finding tests that still
+ *   need a format Selected.
  *
  * ── Design ───────────────────────────────────────────────────────────────
  * Matches the Setup.jsx module-grid language: a soft indigo-tinted radial
@@ -106,6 +113,11 @@ const activeOverrideCount = (test) =>
 // Every stored override, whatever format it was made on — this is what a
 // format change wipes, so it's what the confirmation reports.
 const totalOverrideCount = (test) => test.schema?.overrides?.length ?? 0;
+
+// A test is offline but has at least one report format sitting there unused —
+// the exact condition that drives the row's blinking PendingBadge, and now
+// also the "ফরম্যাট আছে" status filter.
+const needsFormatPick = (test) => !test.schemaId && (test.formatCount ?? 0) > 0;
 
 // ─── design tokens ────────────────────────────────────────────────────────────
 // Same family as Setup.jsx's "teal" module color, applied consistently here
@@ -500,7 +512,7 @@ const FormatRangesModal = ({
         onSaved?.({ ...test, __notFound: true });
         return;
       } else {
-        setSchemaApiError(getErrorMessage(err, "Save করা যায়নি"));
+        setSchemaApiError(getErrorMessage(err, "Save করা যায়নি"));
       }
     } finally {
       setSavingSchema(false);
@@ -631,8 +643,8 @@ const FormatRangesModal = ({
               ) : (
                 <>
                   <p className="text-[13px] text-slate-400">
-                    একটি ফরম্যাট Select করুন। নিচে “ডেমো প্রিভিউ” চাপলে রিপোর্টটি কেমন দেখাবে তা
-                    দেখা যাবে, আর “রেঞ্জ দেখুন” চাপলে সেই ফরম্যাটের রেফারেন্স রেঞ্জ দেখা যাবে।
+                    একটি ফরম্যাট Select করুন। নিচে “ডেমো প্রিভিউ” চাপলে রিপোর্টটি কেমন দেখাবে তা দেখা যাবে, আর “রেঞ্জ
+                    দেখুন” চাপলে সেই ফরম্যাটের রেফারেন্স রেঞ্জ দেখা যাবে।
                   </p>
                   <div role="radiogroup" aria-label="রিপোর্ট ফরম্যাট" className="space-y-2">
                     {schemas.map((schema) => (
@@ -711,7 +723,7 @@ const TestRow = ({ test, categoryRoom, onOpen, onSaved, onNetworkError }) => {
   const overrideCount = activeOverrideCount(test);
   const formatCount = test.formatCount ?? 0;
   const hasFormats = isOnline || formatCount > 0;
-  const needsPick = !isOnline && formatCount > 0; // formats available, none selected
+  const needsPick = needsFormatPick(test); // formats available, none selected
   const formatNote = isOnline
     ? "ফরম্যাট সংযুক্ত আছে"
     : formatCount > 0
@@ -733,7 +745,7 @@ const TestRow = ({ test, categoryRoom, onOpen, onSaved, onNetworkError }) => {
         onSaved?.({ ...test, __notFound: true });
         return;
       } else {
-        setRoomError(getErrorMessage(err, "Save করা যায়নি"));
+        setRoomError(getErrorMessage(err, "Save করা যায়নি"));
       }
     } finally {
       setSavingRoom(false);
@@ -877,7 +889,7 @@ const CategoryGroup = ({
         setRoomApiError(NO_INTERNET);
         onNetworkError?.();
       } else {
-        setRoomApiError(getErrorMessage(err, "Save করা যায়নি"));
+        setRoomApiError(getErrorMessage(err, "Save করা যায়নি"));
       }
     } finally {
       setSavingRoom(false);
@@ -956,10 +968,14 @@ const CategoryGroup = ({
 
 // ─── page ────────────────────────────────────────────────────────────────────
 
+// "ফরম্যাট আছে" sits beside অনলাইন/অফলাইন and narrows the list to tests that
+// are offline but have at least one report format waiting to be Selected
+// (see needsFormatPick above) — the same set the row's PendingBadge flags.
 const STATUS_FILTERS = [
   { id: "all", label: "সব", icon: null },
-  { id: "online", label: "অনলাইন", icon: Wifi },
-  { id: "offline", label: "অফলাইন", icon: WifiOff },
+  { id: "online", label: "Online", icon: Wifi },
+  { id: "offline", label: "Offline", icon: WifiOff },
+  { id: "needsFormat", label: "Format Available", icon: AlertTriangle },
 ];
 
 const TestConfigPage = () => {
@@ -1044,7 +1060,8 @@ const TestConfigPage = () => {
 
   const counts = useMemo(() => {
     const online = tests.filter((t) => !!t.schemaId).length;
-    return { all: tests.length, online, offline: tests.length - online };
+    const needsFormat = tests.filter(needsFormatPick).length;
+    return { all: tests.length, online, offline: tests.length - online, needsFormat };
   }, [tests]);
 
   const groups = useMemo(() => {
@@ -1060,6 +1077,7 @@ const TestConfigPage = () => {
       const list = (byCategory.get(category._id) ?? []).filter((t) => {
         if (statusFilter === "online" && !t.schemaId) return false;
         if (statusFilter === "offline" && t.schemaId) return false;
+        if (statusFilter === "needsFormat" && !needsFormatPick(t)) return false;
         return matchesSearch(t.name, search);
       });
       if (list.length > 0) result.push({ category, tests: list });
@@ -1149,11 +1167,15 @@ const TestConfigPage = () => {
                   </button>
                 )}
               </div>
-              <div className="flex gap-1.5 items-center" role="group" aria-label="স্ট্যাটাস ফিল্টার">
+              <div className="flex gap-1.5 items-center flex-wrap" role="group" aria-label="স্ট্যাটাস ফিল্টার">
                 {STATUS_FILTERS.map(({ id, label, icon: Icon }) => {
                   const active = statusFilter === id;
                   const activeCls =
-                    id === "online" ? "bg-emerald-500 border-emerald-500" : "bg-teal-600 border-teal-600";
+                    id === "online"
+                      ? "bg-emerald-500 border-emerald-500"
+                      : id === "needsFormat"
+                        ? "bg-amber-500 border-amber-500"
+                        : "bg-teal-600 border-teal-600";
                   return (
                     <button
                       key={id}
