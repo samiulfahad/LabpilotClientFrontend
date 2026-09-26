@@ -62,6 +62,7 @@ import DeleteExpense from "./pages/expense/DeleteExpense";
 import ExpenseReport from "./pages/dailyReports/expenseReport";
 import DiscountReport from "./pages/dailyReports/discountReport";
 import ManageTestConfig from "./pages/setup/manageTestConfig";
+import ReportDemoView from "./pages/reportDownload/ReportDemoView";
 
 // ─── Route Wrapper for Protected Pages ──────────────────────────────────────
 const ProtectedRoutes = () => {
@@ -183,6 +184,7 @@ function App() {
           <Route path="/report" element={<Report />} />
           <Route path="/report-upload" element={<ReportUpload />} />
           <Route path="/report-download" element={<ReportDownload />} />
+          <Route path="/demo-report-view" element={<ReportDemoView/> } />
         </Route>
 
         {/* Set up — module: setup (manage-staffs is admin-only, ungated here

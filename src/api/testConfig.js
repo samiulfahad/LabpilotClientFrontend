@@ -61,6 +61,12 @@ const testConfigService = {
   // (PATCH /test-config/:testId/collection-room)
   updateCollectionRoom: (testId, sampleCollectionRoom) =>
     api.patch(`/test-config/${testId}/collection-room`, { sampleCollectionRoom }),
+
+  // ── Demo report preview ──────────────────────────────────────────────────
+  // Sample report data for a given format, used only by the "প্রিভিউ" button
+  // in the format picker — view/print/download only, no upload/edit path.
+  // (GET /demo-report/:schemaId)
+  getDemoReportBySchemaId: (schemaId) => api.get(`/report/demo-preview/${schemaId}`),
 };
 
 export default testConfigService;

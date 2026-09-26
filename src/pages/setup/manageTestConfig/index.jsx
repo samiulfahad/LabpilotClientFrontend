@@ -20,6 +20,14 @@
  *     popup that this page auto-closes (the Popup component is untouched).
  *   - a "রেঞ্জ" button → the same modal on the ranges tab: edit the values
  *     and units used in this lab's reports (needs an attached format)
+ *   - inside the format modal, each schema option is its own card: a header
+ *     row to select it, and a footer row split into two clear actions —
+ *     "ডেমো প্রিভিউ" (opens a demo report overlay with sample data — view/
+ *     print/download only, no upload/edit) and "রেঞ্জ দেখুন" (expands the
+ *     reference-range peek inline). Keeping these on their own row avoids
+ *     stacking three tap targets on one line on narrow screens.
+ *     The demo overlay is rendered as local overlay state on THIS page (not
+ *     a route), so closing it never refetches or resets the list.
  *
  * Data rules:
  * - A sample collection room is a short label (e.g. "204") stored on a test
@@ -30,6 +38,13 @@
  *   stored on the test at `test.schema.overrides`.
  * - Changing (or clearing) a test's format wipes its overrides. The server
  *   does the wipe; the UI asks for confirmation first when any exist.
+ *
+ * ── Design ───────────────────────────────────────────────────────────────
+ * Matches the Setup.jsx module-grid language: a soft indigo-tinted radial
+ * gradient page background, white rounded-2xl cards with a hairline border
+ * and a shadow that lifts on hover, a teal gradient icon badge for the page
+ * header (this module's color in Setup's grid), and a short fade/slide-in
+ * on first paint.
  */
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
@@ -48,10 +63,12 @@ import {
   Wifi,
   WifiOff,
   AlertTriangle,
+  Eye,
 } from "lucide-react";
 import testConfigService from "../../../api/testConfig";
 import Popup from "../../../components/popup";
 import RangeOverridesPanel, { RangeSummary, RefSummary, applyOverrides, idOf } from "./RangeOverridesPanel";
+import ReportDemoView from "../../reportDownload/ReportDemoView";
 
 // ─── shared helpers ──────────────────────────────────────────────────────────
 
@@ -90,68 +107,47 @@ const activeOverrideCount = (test) =>
 // format change wipes, so it's what the confirmation reports.
 const totalOverrideCount = (test) => test.schema?.overrides?.length ?? 0;
 
-// ─── tokens ──────────────────────────────────────────────────────────────────
+// ─── design tokens ────────────────────────────────────────────────────────────
+// Same family as Setup.jsx's "teal" module color, applied consistently here
+// since this whole page IS that module.
 
-const accent = "#155E63"; // deep teal — the one deliberate brand color
-const accentDark = "#0F4A4E";
-const accentSoft = "#EAF3F2";
-const accentLine = "#CFE3E1";
-const green = "#16A34A"; // format available / online
-const greenDark = "#15803D";
-const greenSoft = "#E8F7EE";
-const amber = "#D97706"; // formats available, none selected yet
-const amberDark = "#92400E";
-const amberSoft = "#FEF3C7";
-const ink = "#111827";
-const sub = "#6B7280";
-const line = "#E5E7EB";
-const page = "#F5F7F7";
-const danger = "#B42318";
-const dangerSoft = "#FEF3F2";
-
-const sansCls = "font-['Inter','IBM_Plex_Sans',system-ui,sans-serif]";
-const fieldStyle = { border: `1px solid ${line}`, background: "#fff", color: ink };
-const focusRing = "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2";
-const focusStyle = { outlineColor: accent };
-
-// ─── small shared bits ───────────────────────────────────────────────────────
+const pageBg = "bg-[radial-gradient(ellipse_120%_80%_at_50%_-10%,#eef2ff_0%,#f8fafc_45%,#f8fafc_100%)]";
+const cardCls = "rounded-2xl bg-white border border-slate-200 shadow-sm";
+const cardHoverCls = "transition-shadow duration-200 hover:shadow-md";
+const focusRing =
+  "outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-teal-400";
 
 const Spinner = ({ label }) => (
   <div className="flex items-center gap-2 py-2">
-    <Loader2 className="w-4 h-4 animate-spin" style={{ color: accent }} />
-    <span className={`${sansCls} text-[13px]`} style={{ color: sub }}>
-      {label}
-    </span>
+    <Loader2 className="w-4 h-4 animate-spin text-teal-600" />
+    <span className="text-[13px] text-slate-400">{label}</span>
   </div>
 );
 
 const ErrorLine = ({ children }) => (
-  <p
-    className={`${sansCls} text-[13px] rounded-lg px-3 py-2`}
-    style={{ color: danger, background: dangerSoft }}
-    role="alert"
-  >
+  <p className="text-[13px] rounded-xl px-3 py-2 bg-rose-50 text-rose-600 border border-rose-100" role="alert">
     {children}
   </p>
 );
 
-const Pill = ({ icon: Icon, children, tone = "soft" }) => (
-  <span
-    className={`${sansCls} inline-flex items-center gap-1 text-[12px] rounded-full px-2.5 py-0.5 whitespace-nowrap`}
-    style={
-      tone === "accent"
-        ? { background: accent, color: "#fff" }
-        : tone === "green"
-          ? { background: greenSoft, color: greenDark }
-          : tone === "plain"
-            ? { background: "#F3F4F6", color: sub }
-            : { background: accentSoft, color: accent }
-    }
-  >
-    {Icon && <Icon className="w-3 h-3" />}
-    {children}
-  </span>
-);
+const Pill = ({ icon: Icon, children, tone = "soft" }) => {
+  const toneCls =
+    tone === "accent"
+      ? "bg-teal-600 text-white"
+      : tone === "green"
+        ? "bg-emerald-50 text-emerald-600 border border-emerald-100"
+        : tone === "plain"
+          ? "bg-slate-100 text-slate-500"
+          : "bg-teal-50 text-teal-700 border border-teal-100";
+  return (
+    <span
+      className={`inline-flex items-center gap-1 text-[12px] rounded-full px-2.5 py-0.5 whitespace-nowrap ${toneCls}`}
+    >
+      {Icon && <Icon className="w-3 h-3" />}
+      {children}
+    </span>
+  );
+};
 
 const StatusPill = ({ online }) => (
   <Pill icon={online ? Wifi : WifiOff} tone={online ? "green" : "plain"}>
@@ -164,18 +160,14 @@ const StatusPill = ({ online }) => (
 const PendingBadge = () => (
   <span
     role="status"
-    title="ফরম্যাট আছে, কিন্তু এখনো বাছাই করা হয়নি"
-    className={`${sansCls} inline-flex items-center gap-1.5 text-[11.5px] font-medium rounded-full px-2 py-0.5 whitespace-nowrap animate-pulse motion-reduce:animate-none`}
-    style={{ background: amberSoft, color: amberDark }}
+    title="ফরম্যাট আছে, কিন্তু এখনো Select করা হয়নি"
+    className="inline-flex items-center gap-1.5 text-[11.5px] font-medium rounded-full px-2 py-0.5 whitespace-nowrap bg-amber-50 text-amber-700 animate-pulse motion-reduce:animate-none"
   >
     <span className="relative flex w-2 h-2">
-      <span
-        className="absolute inline-flex w-full h-full rounded-full opacity-75 animate-ping motion-reduce:animate-none"
-        style={{ background: amber }}
-      />
-      <span className="relative inline-flex w-2 h-2 rounded-full" style={{ background: amber }} />
+      <span className="absolute inline-flex w-full h-full rounded-full bg-amber-400 opacity-75 animate-ping motion-reduce:animate-none" />
+      <span className="relative inline-flex w-2 h-2 rounded-full bg-amber-500" />
     </span>
-    বাছাই বাকি
+    Format Available
   </span>
 );
 
@@ -183,8 +175,11 @@ const PrimaryButton = ({ children, disabled, ...rest }) => (
   <button
     type="button"
     disabled={disabled}
-    className={`${sansCls} ${focusRing} text-[13px] font-medium text-white rounded-lg px-4 py-2.5 transition-colors`}
-    style={{ background: disabled ? "#9CA3AF" : accent, ...focusStyle }}
+    className={`${focusRing} text-[13px] font-semibold text-white rounded-xl px-4 py-2.5 transition-all ${
+      disabled
+        ? "bg-slate-300 cursor-not-allowed"
+        : "bg-gradient-to-br from-teal-500 to-teal-600 shadow hover:shadow-md hover:-translate-y-px"
+    }`}
     {...rest}
   >
     {children}
@@ -194,8 +189,11 @@ const PrimaryButton = ({ children, disabled, ...rest }) => (
 const GhostButton = ({ children, tone, ...rest }) => (
   <button
     type="button"
-    className={`${sansCls} ${focusRing} text-[13px] font-medium rounded-lg px-4 py-2.5 bg-white disabled:opacity-50`}
-    style={{ border: `1px solid ${line}`, color: tone === "danger" ? danger : ink, ...focusStyle }}
+    className={`${focusRing} text-[13px] font-medium rounded-xl px-4 py-2.5 bg-white border transition-colors disabled:opacity-50 ${
+      tone === "danger"
+        ? "border-rose-200 text-rose-600 hover:bg-rose-50"
+        : "border-slate-200 text-slate-700 hover:bg-slate-50"
+    }`}
     {...rest}
   >
     {children}
@@ -205,8 +203,7 @@ const GhostButton = ({ children, tone, ...rest }) => (
 const DangerButton = ({ children, ...rest }) => (
   <button
     type="button"
-    className={`${sansCls} ${focusRing} text-[13px] font-medium text-white rounded-lg px-4 py-2.5`}
-    style={{ background: danger, outlineColor: danger }}
+    className={`${focusRing} text-[13px] font-semibold text-white rounded-xl px-4 py-2.5 bg-rose-600 hover:bg-rose-700 transition-colors`}
     {...rest}
   >
     {children}
@@ -229,23 +226,22 @@ const RoomInlineEditor = ({ initialValue, saving, onSave, onCancel, placeholder 
           if (e.key === "Enter") onSave(value.trim() || null);
           if (e.key === "Escape") onCancel();
         }}
-        className={`${sansCls} text-[13px] px-2.5 py-1.5 w-24 rounded-lg outline-none`}
-        style={fieldStyle}
+        className="text-[13px] px-2.5 py-1.5 w-24 rounded-lg outline-none border border-slate-200 bg-white text-slate-800 focus:ring-2 focus:ring-teal-100"
       />
       <button
         type="button"
         disabled={saving}
         onClick={() => onSave(value.trim() || null)}
-        className={`${sansCls} ${focusRing} text-[12px] font-medium text-white rounded-lg px-3 py-1.5`}
-        style={{ background: saving ? "#9CA3AF" : accent, ...focusStyle }}
+        className={`${focusRing} text-[12px] font-semibold text-white rounded-lg px-3 py-1.5 ${
+          saving ? "bg-slate-300" : "bg-teal-600 hover:bg-teal-700"
+        }`}
       >
-        {saving ? "…" : "সংরক্ষণ"}
+        {saving ? "…" : "Save"}
       </button>
       <button
         type="button"
         onClick={onCancel}
-        className={`${sansCls} ${focusRing} text-[12px] px-1.5 py-1 rounded`}
-        style={{ color: sub, ...focusStyle }}
+        className={`${focusRing} text-[12px] px-1.5 py-1 rounded text-slate-400 hover:text-slate-600`}
       >
         বাতিল
       </button>
@@ -271,15 +267,15 @@ const Modal = ({ onClose, labelledBy, children, zIndex = 50, widthCls = "sm:max-
   // z-index can clip or stack over it.
   return createPortal(
     <div
-      className="fixed inset-0 flex items-end sm:items-center justify-center sm:p-6"
-      style={{ background: "rgba(17,24,39,.45)", zIndex }}
+      className="fixed inset-0 flex items-end sm:items-center justify-center sm:p-6 bg-slate-900/50"
+      style={{ zIndex }}
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby={labelledBy}
-        className={`bg-white w-full ${widthCls} max-h-[92vh] sm:max-h-[88vh] flex flex-col rounded-t-2xl sm:rounded-2xl overflow-hidden shadow-2xl`}
+        className={`bg-white w-full ${widthCls} max-h-[92vh] sm:max-h-[88vh] flex flex-col rounded-t-3xl sm:rounded-2xl overflow-hidden shadow-2xl border border-slate-200 animate-[modalIn_0.2s_ease-out_both]`}
       >
         {children}
       </div>
@@ -292,24 +288,17 @@ const Modal = ({ onClose, labelledBy, children, zIndex = 50, widthCls = "sm:max-
 const ConfirmOverrideWipeModal = ({ count, action, onCancel, onConfirm }) => (
   <Modal onClose={onCancel} labelledBy="confirm-wipe-title" zIndex={60} widthCls="sm:max-w-md">
     <div className="px-5 pt-5 pb-2 sm:px-6 flex items-start gap-3">
-      <span
-        className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
-        style={{ background: dangerSoft }}
-      >
-        <AlertTriangle className="w-5 h-5" style={{ color: danger }} />
+      <span className="w-9 h-9 rounded-2xl bg-rose-50 flex items-center justify-center shrink-0">
+        <AlertTriangle className="w-5 h-5 text-rose-600" />
       </span>
       <div className="min-w-0">
-        <h3
-          id="confirm-wipe-title"
-          className={`${sansCls} text-[16px] leading-snug font-semibold`}
-          style={{ color: ink }}
-        >
+        <h3 id="confirm-wipe-title" className="text-[16px] leading-snug font-semibold text-slate-900">
           পুরনো কাস্টম রেঞ্জ মুছে যাবে
         </h3>
-        <p className={`${sansCls} text-[13.5px] leading-relaxed mt-1.5`} style={{ color: sub }}>
+        <p className="text-[13.5px] leading-relaxed mt-1.5 text-slate-500">
           এই টেস্টে {count}টি কাস্টম রেফারেন্স রেঞ্জ/ইউনিট আছে।{" "}
           {action === "offline" ? "অফলাইন করলে" : "ফরম্যাট বদলালে"} এগুলো স্থায়ীভাবে মুছে যাবে
-          {action === "offline" ? "।" : " এবং নতুন ফরম্যাটের ডিফল্ট মান ব্যবহার হবে।"} এটি ফেরানো যাবে না।
+          {action === "offline" ? "।" : " এবং নতুন ফরম্যাটের ডিফল্ট মান ব্যবহার হবে।"}।
         </p>
       </div>
     </div>
@@ -328,25 +317,17 @@ const FormatPreview = ({ schema }) => {
     .map((sec) => ({ sec, fields: (sec.fields ?? []).filter((f) => PREVIEW_TYPES.includes(f.type)) }))
     .filter((s) => s.fields.length > 0);
 
-  if (rows.length === 0)
-    return (
-      <p className={`${sansCls} text-[13px]`} style={{ color: sub }}>
-        এই ফরম্যাটে কোনো রেফারেন্স রেঞ্জ নেই।
-      </p>
-    );
+  if (rows.length === 0) return <p className="text-[13px] text-slate-400">এই ফরম্যাটে কোনো রেফারেন্স রেঞ্জ নেই।</p>;
 
   return (
     <div className="space-y-3">
       {rows.map(({ sec, fields }) => (
         <div key={idOf(sec) || sec.name}>
-          <p className={`${sansCls} text-[12.5px] font-semibold mb-1`} style={{ color: ink }}>
-            {sec.name}
-          </p>
+          <p className="text-[12.5px] font-semibold mb-1 text-slate-800">{sec.name}</p>
           {fields.map((f) => (
             <div
               key={idOf(f) || f.name}
-              className={`${sansCls} flex gap-3 py-2 text-[12.5px]`}
-              style={{ borderTop: `1px solid ${line}`, color: ink }}
+              className="flex gap-3 py-2 text-[12.5px] border-t border-slate-100 text-slate-700"
             >
               <span className="w-32 sm:w-40 shrink-0 font-medium">{f.name}</span>
               <div className="flex-1 min-w-0">
@@ -356,9 +337,7 @@ const FormatPreview = ({ schema }) => {
                   <RefSummary refValue={f.referenceValue} />
                 )}
               </div>
-              <span className="shrink-0" style={{ color: sub }}>
-                {f.unit || ""}
-              </span>
+              <span className="shrink-0 text-slate-400">{f.unit || ""}</span>
             </div>
           ))}
         </div>
@@ -367,9 +346,88 @@ const FormatPreview = ({ schema }) => {
   );
 };
 
+// ─── schema picker card ───────────────────────────────────────────────────────
+// One schema = one card, two clearly separated rows:
+//   header  → tap anywhere to select this format
+//   footer  → "ডেমো প্রিভিউ" and "রেঞ্জ দেখুন", side by side, each its own
+//             tap target — so the header never has to carry three actions
+//             at once (the old crowding on narrow screens).
+const SchemaCard = ({ schema, test, selected, isCurrent, rangesOpen, onSelect, onToggleRanges, onOpenDemo }) => {
+  // For the format this test already uses, show the lab's own saved values.
+  const shown = schema._id === test.schemaId ? applyOverrides(schema, test.schema?.overrides) : schema;
+
+  return (
+    <div
+      className={`rounded-2xl overflow-hidden transition-all ${
+        selected ? "bg-teal-50 border-2 border-teal-400 shadow-sm" : "bg-white border border-slate-200"
+      }`}
+    >
+      <button
+        type="button"
+        role="radio"
+        aria-checked={selected}
+        onClick={onSelect}
+        className={`${focusRing} w-full flex items-center gap-3 text-left px-4 py-3.5`}
+      >
+        <span
+          className={`w-[18px] h-[18px] rounded-full shrink-0 flex items-center justify-center border-2 ${
+            selected ? "border-teal-500" : "border-slate-300"
+          }`}
+        >
+          {selected && <span className="w-2 h-2 rounded-full bg-teal-500" />}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className={`block text-[14px] ${selected ? "text-teal-800 font-semibold" : "text-slate-800"}`}>
+            {schema.description || "নামহীন ফরম্যাট"}
+          </span>
+          <span className="block text-[12px] text-slate-400">{countFields(schema)}টি ফিল্ডে রেঞ্জ/মান</span>
+        </span>
+        {isCurrent && <Pill tone="green">বর্তমান</Pill>}
+      </button>
+
+      <div className="flex items-stretch border-t border-slate-100">
+        <button
+          type="button"
+          onClick={onOpenDemo}
+          title="ডেমো রিপোর্ট দেখুন — শুধু দেখা, ছাপানো ও ডাউনলোড করা যাবে"
+          className={`${focusRing} flex-1 flex items-center justify-center gap-1.5 text-[12.5px] font-medium py-2.5 text-teal-700 hover:bg-teal-50/60 transition-colors`}
+        >
+          <Eye className="w-3.5 h-3.5" />
+          ডেমো প্রিভিউ
+        </button>
+        <span className="w-px bg-slate-100" />
+        <button
+          type="button"
+          onClick={onToggleRanges}
+          aria-expanded={rangesOpen}
+          className={`${focusRing} flex-1 flex items-center justify-center gap-1.5 text-[12.5px] font-medium py-2.5 text-slate-500 hover:bg-slate-50 transition-colors`}
+        >
+          রেঞ্জ দেখুন
+          <ChevronDown className={`w-3.5 h-3.5 transition-transform ${rangesOpen ? "rotate-180" : ""}`} />
+        </button>
+      </div>
+
+      {rangesOpen && (
+        <div className="px-4 pb-4 pt-3 bg-white border-t border-slate-100">
+          <FormatPreview schema={shown} />
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ─── format + ranges modal ───────────────────────────────────────────────────
 
-const FormatRangesModal = ({ test, category, initialTab, onClose, onSaved, onSuccess, onNetworkError }) => {
+const FormatRangesModal = ({
+  test,
+  category,
+  initialTab,
+  onClose,
+  onSaved,
+  onSuccess,
+  onNetworkError,
+  onOpenDemoPreview,
+}) => {
   const [tab, setTab] = useState(initialTab);
 
   const [schemas, setSchemas] = useState([]);
@@ -383,6 +441,14 @@ const FormatRangesModal = ({ test, category, initialTab, onClose, onSaved, onSuc
   const [confirmAction, setConfirmAction] = useState(null); // null | "save" | "offline"
 
   const selectSchema = (schemaId) => setSelectedSchemaId(schemaId);
+
+  // Opens the demo report preview overlay for this schema — handled by the
+  // parent page (TestConfigPage) so it renders as a sibling overlay instead
+  // of a route. Routing away would unmount TestConfigPage and force a
+  // refetch of the whole test/category list on close.
+  const openDemoPreview = (schema) => {
+    onOpenDemoPreview?.({ schemaId: schema._id, testName: test.name });
+  };
 
   const handleLoadError = (err, setter, fallback) => {
     if (isNetworkError(err)) {
@@ -425,7 +491,7 @@ const FormatRangesModal = ({ test, category, initialTab, onClose, onSaved, onSuc
     try {
       await handleSaveSchema(selectedSchemaId);
       onClose();
-      onSuccess?.("ফরম্যাট সফলভাবে সংরক্ষণ করা হয়েছে।");
+      onSuccess?.("ফরম্যাট সফলভাবে Save করা হয়েছে।");
     } catch (err) {
       if (isNetworkError(err)) {
         setSchemaApiError(NO_INTERNET);
@@ -434,7 +500,7 @@ const FormatRangesModal = ({ test, category, initialTab, onClose, onSaved, onSuc
         onSaved?.({ ...test, __notFound: true });
         return;
       } else {
-        setSchemaApiError(getErrorMessage(err, "সংরক্ষণ ব্যর্থ হয়েছে।"));
+        setSchemaApiError(getErrorMessage(err, "Save করা যায়নি"));
       }
     } finally {
       setSavingSchema(false);
@@ -502,13 +568,9 @@ const FormatRangesModal = ({ test, category, initialTab, onClose, onSaved, onSuc
         labelledBy="fr-modal-title"
       >
         {/* header */}
-        <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3 sm:px-6">
+        <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3 sm:px-6 bg-slate-50/70 border-b border-slate-200">
           <div className="min-w-0">
-            <h2
-              id="fr-modal-title"
-              className={`${sansCls} text-[19px] leading-snug font-semibold`}
-              style={{ color: ink }}
-            >
+            <h2 id="fr-modal-title" className="text-[19px] leading-snug font-bold text-slate-900">
               {test.name}
             </h2>
             <div className="flex items-center gap-2 flex-wrap mt-2">
@@ -520,15 +582,14 @@ const FormatRangesModal = ({ test, category, initialTab, onClose, onSaved, onSuc
             type="button"
             onClick={onClose}
             aria-label="বন্ধ করুন"
-            className={`${focusRing} p-2 -mr-2 -mt-1 rounded-lg hover:bg-[#F3F4F6]`}
-            style={focusStyle}
+            className={`${focusRing} p-2 -mr-2 -mt-1 rounded-xl hover:bg-slate-100 transition-colors`}
           >
-            <X className="w-5 h-5" style={{ color: sub }} />
+            <X className="w-5 h-5 text-slate-400" />
           </button>
         </div>
 
         {/* tabs */}
-        <div className="flex gap-1 px-3 sm:px-5" style={{ borderBottom: `1px solid ${line}` }} role="tablist">
+        <div className="flex gap-1 px-3 sm:px-5 border-b border-slate-200" role="tablist">
           {tabs.map(({ id, label, icon: Icon }) => {
             const active = tab === id;
             return (
@@ -538,20 +599,15 @@ const FormatRangesModal = ({ test, category, initialTab, onClose, onSaved, onSuc
                 role="tab"
                 aria-selected={active}
                 onClick={() => setTab(id)}
-                className={`${sansCls} ${focusRing} flex items-center gap-2 px-3 py-3 text-[14px] whitespace-nowrap -mb-px`}
-                style={{
-                  color: active ? accent : sub,
-                  fontWeight: active ? 600 : 400,
-                  borderBottom: `2px solid ${active ? accent : "transparent"}`,
-                  ...focusStyle,
-                }}
+                className={`${focusRing} flex items-center gap-2 px-3 py-3 text-[14px] whitespace-nowrap -mb-px border-b-2 transition-colors ${
+                  active ? "border-teal-600 text-teal-700 font-semibold" : "border-transparent text-slate-400"
+                }`}
               >
                 <Icon className="w-4 h-4" />
                 {label}
                 {id === "ranges" && overrideCount > 0 && (
                   <span
-                    className="text-[11px] rounded-full min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center"
-                    style={{ background: accentSoft, color: accent }}
+                    className="text-[11px] rounded-full min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center bg-teal-50 text-teal-700"
                     title="পরিবর্তিত ফিল্ড"
                   >
                     {overrideCount}
@@ -571,85 +627,32 @@ const FormatRangesModal = ({ test, category, initialTab, onClose, onSaved, onSuc
               ) : schemaError ? (
                 <ErrorLine>{schemaError}</ErrorLine>
               ) : schemas.length === 0 ? (
-                <p className={`${sansCls} text-[14px]`} style={{ color: sub }}>
-                  এই টেস্টের জন্য কোনো ফরম্যাট তৈরি করা হয়নি।
-                </p>
+                <p className="text-[14px] text-slate-400">এই টেস্টের জন্য কোনো ফরম্যাট তৈরি করা হয়নি।</p>
               ) : (
                 <>
-                  <p className={`${sansCls} text-[13px]`} style={{ color: sub }}>
-                    একটি ফরম্যাট বেছে নিন। “রেঞ্জ দেখুন” চাপলে সেই ফরম্যাটের রেফারেন্স রেঞ্জ দেখা যাবে।
+                  <p className="text-[13px] text-slate-400">
+                    একটি ফরম্যাট Select করুন। নিচে “ডেমো প্রিভিউ” চাপলে রিপোর্টটি কেমন দেখাবে তা
+                    দেখা যাবে, আর “রেঞ্জ দেখুন” চাপলে সেই ফরম্যাটের রেফারেন্স রেঞ্জ দেখা যাবে।
                   </p>
                   <div role="radiogroup" aria-label="রিপোর্ট ফরম্যাট" className="space-y-2">
-                    {schemas.map((schema) => {
-                      const selected = selectedSchemaId === schema._id;
-                      const open = previewId === schema._id;
-                      // For the format this test already uses, show the lab's own values.
-                      const shown =
-                        schema._id === test.schemaId ? applyOverrides(schema, test.schema?.overrides) : schema;
-                      return (
-                        <div
-                          key={schema._id}
-                          className="rounded-xl overflow-hidden"
-                          style={{
-                            background: selected ? accentSoft : "#fff",
-                            border: `1.5px solid ${selected ? accent : line}`,
-                          }}
-                        >
-                          <div className="flex items-center">
-                            <button
-                              type="button"
-                              role="radio"
-                              aria-checked={selected}
-                              onClick={() => selectSchema(schema._id)}
-                              className={`${sansCls} ${focusRing} flex-1 min-w-0 flex items-center gap-3 text-left px-4 py-3.5`}
-                              style={focusStyle}
-                            >
-                              <span
-                                className="w-[18px] h-[18px] rounded-full shrink-0 flex items-center justify-center"
-                                style={{ border: `2px solid ${selected ? accent : "#D1D5DB"}` }}
-                              >
-                                {selected && <span className="w-2 h-2 rounded-full" style={{ background: accent }} />}
-                              </span>
-                              <span className="min-w-0">
-                                <span
-                                  className="block text-[14px]"
-                                  style={{ color: selected ? accentDark : ink, fontWeight: selected ? 600 : 400 }}
-                                >
-                                  {schema.description || "নামহীন ফরম্যাট"}
-                                </span>
-                                <span className="block text-[12px]" style={{ color: sub }}>
-                                  {countFields(schema)}টি ফিল্ডে রেঞ্জ/মান
-                                </span>
-                              </span>
-                              {test.schemaId === schema._id && <Pill tone="green">বর্তমান</Pill>}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setPreviewId(open ? null : schema._id)}
-                              aria-expanded={open}
-                              className={`${sansCls} ${focusRing} flex items-center gap-1 text-[12.5px] mr-3 px-2 py-1.5 rounded-lg shrink-0`}
-                              style={{ color: accent, ...focusStyle }}
-                            >
-                              রেঞ্জ দেখুন
-                              <ChevronDown
-                                className="w-3.5 h-3.5 transition-transform"
-                                style={{ transform: open ? "rotate(180deg)" : "none" }}
-                              />
-                            </button>
-                          </div>
-                          {open && (
-                            <div className="px-4 pb-4 pt-2 bg-white" style={{ borderTop: `1px solid ${line}` }}>
-                              <FormatPreview schema={shown} />
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                    {schemas.map((schema) => (
+                      <SchemaCard
+                        key={schema._id}
+                        schema={schema}
+                        test={test}
+                        selected={selectedSchemaId === schema._id}
+                        isCurrent={test.schemaId === schema._id}
+                        rangesOpen={previewId === schema._id}
+                        onSelect={() => selectSchema(schema._id)}
+                        onToggleRanges={() => setPreviewId(previewId === schema._id ? null : schema._id)}
+                        onOpenDemo={() => openDemoPreview(schema)}
+                      />
+                    ))}
                   </div>
 
-                  <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-3 flex-wrap pt-1">
                     <PrimaryButton onClick={requestSave} disabled={savingSchema || makingOffline}>
-                      {savingSchema ? "সংরক্ষণ হচ্ছে…" : "সংরক্ষণ করুন"}
+                      {savingSchema ? "Save করা হচ্ছে…" : "Save করুন"}
                     </PrimaryButton>
                     <GhostButton
                       tone={selectedSchemaId === null ? undefined : "danger"}
@@ -667,7 +670,7 @@ const FormatRangesModal = ({ test, category, initialTab, onClose, onSaved, onSuc
 
           {tab === "ranges" && (
             <div>
-              <p className={`${sansCls} text-[13px] mb-4 leading-relaxed`} style={{ color: sub }}>
+              <p className="text-[13px] mb-4 leading-relaxed text-slate-500">
                 রিপোর্টে এই ল্যাবের জন্য ব্যবহৃত মান ও ইউনিট। শুধু সংখ্যা, রেফারেন্স মান ও ইউনিট বদলানো যাবে।
               </p>
               <RangeOverridesPanel
@@ -712,7 +715,7 @@ const TestRow = ({ test, categoryRoom, onOpen, onSaved, onNetworkError }) => {
   const formatNote = isOnline
     ? "ফরম্যাট সংযুক্ত আছে"
     : formatCount > 0
-      ? `${formatCount}টি ফরম্যাট আছে — এখনো বাছাই করা হয়নি`
+      ? `${formatCount}টি ফরম্যাট আছে — এখনো Select করা হয়নি`
       : "কোনো ফরম্যাট নেই";
 
   const handleSaveRoom = async (value) => {
@@ -730,47 +733,41 @@ const TestRow = ({ test, categoryRoom, onOpen, onSaved, onNetworkError }) => {
         onSaved?.({ ...test, __notFound: true });
         return;
       } else {
-        setRoomError(getErrorMessage(err, "সংরক্ষণ ব্যর্থ হয়েছে।"));
+        setRoomError(getErrorMessage(err, "Save করা যায়নি"));
       }
     } finally {
       setSavingRoom(false);
     }
   };
 
-  const chipBtn = `${sansCls} ${focusRing} inline-flex items-center gap-1.5 text-[13px] rounded-lg px-2.5 py-1.5 whitespace-nowrap`;
+  const chipBtn = `${focusRing} inline-flex items-center gap-1.5 text-[13px] rounded-xl px-2.5 py-1.5 whitespace-nowrap transition-colors`;
 
   return (
-    <li style={{ borderTop: `1px solid ${line}` }}>
+    <li className="border-t border-slate-100">
       <div className="flex items-center gap-x-3 gap-y-2 flex-wrap px-4 py-3">
         <div className="flex items-center gap-2.5 flex-1 min-w-[170px]">
           {/* status: Wifi = online (format attached), WifiOff = offline.
               Green dot badge = a format is available for this test. */}
           <span
-            className="relative w-7 h-7 rounded-full shrink-0 flex items-center justify-center"
-            style={{ background: isOnline ? greenSoft : "#F3F4F6" }}
+            className={`relative w-7 h-7 rounded-xl shrink-0 flex items-center justify-center ${
+              isOnline ? "bg-emerald-50" : "bg-slate-100"
+            }`}
             title={`${isOnline ? "অনলাইন" : "অফলাইন"} — ${formatNote}`}
           >
-            {isOnline ? (
-              <Wifi className="w-4 h-4" style={{ color: green }} />
-            ) : (
-              <WifiOff className="w-4 h-4" style={{ color: "#9CA3AF" }} />
-            )}
+            {isOnline ? <Wifi className="w-4 h-4 text-emerald-600" /> : <WifiOff className="w-4 h-4 text-slate-400" />}
             {hasFormats && (
               <span
-                className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full"
-                style={{ background: green, border: "2px solid #fff" }}
+                className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-white"
                 aria-hidden="true"
               />
             )}
           </span>
           <span className="min-w-0">
             <span className="flex items-center gap-2 flex-wrap">
-              <span className={`${sansCls} text-[14.5px]`} style={{ color: ink }}>
-                {test.name}
-              </span>
+              <span className="text-[14.5px] text-slate-800">{test.name}</span>
               {needsPick && <PendingBadge />}
             </span>
-            <span className={`${sansCls} block text-[12px]`} style={{ color: hasFormats ? greenDark : sub }}>
+            <span className={`block text-[12px] ${hasFormats ? "text-emerald-600" : "text-slate-400"}`}>
               {formatNote}
             </span>
           </span>
@@ -791,13 +788,11 @@ const TestRow = ({ test, categoryRoom, onOpen, onSaved, onNetworkError }) => {
               type="button"
               onClick={() => setEditingRoom(true)}
               title={inheritedRoom ? "ক্যাটাগরির ডিফল্ট কক্ষ — পরিবর্তন করতে ক্লিক করুন" : "কক্ষ পরিবর্তন করুন"}
-              className={chipBtn}
-              style={{
-                border: `1px ${room ? "solid" : "dashed"} ${room ? accentLine : "#D1D5DB"}`,
-                background: room ? accentSoft : "#fff",
-                color: room ? accent : sub,
-                ...focusStyle,
-              }}
+              className={`${chipBtn} ${
+                room
+                  ? "bg-teal-50 border border-teal-100 text-teal-700 hover:bg-teal-100"
+                  : "bg-white border border-dashed border-slate-300 text-slate-400 hover:bg-slate-50"
+              }`}
             >
               <DoorOpen className="w-3.5 h-3.5" />
               {room ? `কক্ষ ${room}` : "কক্ষ দিন"}
@@ -812,15 +807,14 @@ const TestRow = ({ test, categoryRoom, onOpen, onSaved, onNetworkError }) => {
               <button
                 type="button"
                 onClick={() => onOpen(test._id, "format")}
-                className={chipBtn}
-                style={
+                className={`${chipBtn} ${
                   isOnline
-                    ? { background: green, color: "#fff", ...focusStyle }
-                    : { border: `1px solid ${green}`, background: "#fff", color: greenDark, ...focusStyle }
-                }
+                    ? "bg-emerald-500 text-white hover:bg-emerald-600 shadow-sm"
+                    : "bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                }`}
               >
                 <FileText className="w-3.5 h-3.5" />
-                {isOnline ? "ফরম্যাট" : "ফরম্যাট বাছুন"}
+                {isOnline ? "ফরম্যাট" : "Select ফরম্যাট"}
               </button>
 
               {/* ranges */}
@@ -828,16 +822,14 @@ const TestRow = ({ test, categoryRoom, onOpen, onSaved, onNetworkError }) => {
                 type="button"
                 disabled={!isOnline}
                 onClick={() => onOpen(test._id, "ranges")}
-                title={isOnline ? "রেফারেন্স রেঞ্জ দেখুন/পরিবর্তন করুন" : "আগে একটি ফরম্যাট বেছে নিন"}
-                className={`${chipBtn} disabled:opacity-40 disabled:cursor-not-allowed`}
-                style={{ border: `1px solid ${line}`, background: "#fff", color: ink, ...focusStyle }}
+                title={isOnline ? "রেফারেন্স রেঞ্জ দেখুন/পরিবর্তন করুন" : "আগে একটি ফরম্যাট Select করুন"}
+                className={`${chipBtn} border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white`}
               >
                 <Ruler className="w-3.5 h-3.5" />
                 রেঞ্জ
                 {overrideCount > 0 && (
                   <span
-                    className="text-[11px] rounded-full min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center"
-                    style={{ background: accentSoft, color: accent }}
+                    className="text-[11px] rounded-full min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center bg-teal-50 text-teal-700"
                     title="পরিবর্তিত ফিল্ড"
                   >
                     {overrideCount}
@@ -867,6 +859,7 @@ const CategoryGroup = ({
   onTestSaved,
   onNetworkError,
   onSetCategoryRoom,
+  animDelay,
 }) => {
   const [editingRoom, setEditingRoom] = useState(false);
   const [savingRoom, setSavingRoom] = useState(false);
@@ -884,7 +877,7 @@ const CategoryGroup = ({
         setRoomApiError(NO_INTERNET);
         onNetworkError?.();
       } else {
-        setRoomApiError(getErrorMessage(err, "সংরক্ষণ ব্যর্থ হয়েছে।"));
+        setRoomApiError(getErrorMessage(err, "Save করা যায়নি"));
       }
     } finally {
       setSavingRoom(false);
@@ -892,26 +885,24 @@ const CategoryGroup = ({
   };
 
   return (
-    <div className="rounded-2xl bg-white mb-4 overflow-hidden" style={{ border: `1px solid ${line}` }}>
+    <div
+      style={{ animationDelay: `${animDelay}ms` }}
+      className={`${cardCls} ${cardHoverCls} mb-4 overflow-hidden animate-[cardIn_0.35s_cubic-bezier(.22,1,.36,1)_both]`}
+    >
       <div
-        className="flex items-center justify-between gap-x-4 gap-y-2 flex-wrap px-4 py-3"
-        style={{ background: accentSoft }}
+        className={`flex items-center justify-between gap-x-4 gap-y-2 flex-wrap px-4 py-3 ${
+          open ? "border-b border-slate-100" : ""
+        } bg-slate-50/60 rounded-t-2xl`}
       >
         <button
           type="button"
           onClick={onToggle}
           aria-expanded={open}
-          className={`${sansCls} ${focusRing} flex items-center gap-2 text-left rounded`}
-          style={focusStyle}
+          className={`${focusRing} flex items-center gap-2 text-left rounded-lg`}
         >
-          <ChevronDown
-            className="w-4 h-4 shrink-0 transition-transform"
-            style={{ color: accent, transform: open ? "none" : "rotate(-90deg)" }}
-          />
-          <span className="text-[15px] font-semibold" style={{ color: ink }}>
-            {category.name}
-          </span>
-          <span className="text-[12px] rounded-full px-2 py-0.5 bg-white" style={{ color: sub }}>
+          <ChevronDown className={`w-4 h-4 shrink-0 transition-transform text-teal-600 ${open ? "" : "-rotate-90"}`} />
+          <span className="text-[15px] font-bold text-slate-800">{category.name}</span>
+          <span className="text-[12px] rounded-full px-2 py-0.5 bg-white border border-slate-200 text-slate-400">
             {tests.length}
           </span>
         </button>
@@ -929,8 +920,9 @@ const CategoryGroup = ({
             type="button"
             onClick={() => setEditingRoom(true)}
             title="ক্যাটাগরির ডিফল্ট কক্ষ পরিবর্তন করুন"
-            className={`${sansCls} ${focusRing} inline-flex items-center gap-1.5 text-[13px] rounded`}
-            style={{ color: categoryRoom ? accent : sub, ...focusStyle }}
+            className={`${focusRing} inline-flex items-center gap-1.5 text-[13px] rounded-lg ${
+              categoryRoom ? "text-teal-700" : "text-slate-400"
+            }`}
           >
             <DoorOpen className="w-4 h-4" />
             {categoryRoom ? `ডিফল্ট কক্ষ ${categoryRoom}` : "ডিফল্ট কক্ষ নির্ধারিত নয়"}
@@ -980,6 +972,7 @@ const TestConfigPage = () => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [collapsed, setCollapsed] = useState({});
   const [modal, setModal] = useState(null); // { testId, tab }
+  const [demoPreview, setDemoPreview] = useState(null); // { schemaId, testName } | null
   const [offlinePopup, setOfflinePopup] = useState(false);
   const [successMsg, setSuccessMsg] = useState(""); // non-empty = success popup showing
 
@@ -1079,7 +1072,7 @@ const TestConfigPage = () => {
   const searching = strip(search) !== "";
 
   return (
-    <section className="min-h-screen font-[Noto_Sans_Bengali,sans-serif]" style={{ background: page }}>
+    <section className={`min-h-screen ${pageBg} font-noto`}>
       {modalTest && (
         <FormatRangesModal
           key={`${modalTest._id}-${modal.tab}`}
@@ -1090,33 +1083,38 @@ const TestConfigPage = () => {
           onSaved={handleTestSaved}
           onSuccess={setSuccessMsg}
           onNetworkError={handleNetworkError}
+          onOpenDemoPreview={setDemoPreview}
         />
       )}
+
+      {demoPreview && (
+        <ReportDemoView
+          schemaId={demoPreview.schemaId}
+          testName={demoPreview.testName}
+          onClose={() => setDemoPreview(null)}
+        />
+      )}
+
       {offlinePopup && <Popup type="offline" onClose={() => setOfflinePopup(false)} />}
       {successMsg && <Popup type="success" message={successMsg} onClose={() => setSuccessMsg("")} />}
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
         <div className="flex items-start justify-between gap-4 mb-6">
           <div className="flex items-start gap-3">
-            <span
-              className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-              style={{ background: accent }}
-            >
-              <FlaskConical className="w-5 h-5 text-white" />
-            </span>
+            <div className="relative w-12 h-12 rounded-2xl bg-gradient-to-br from-teal-500 via-teal-500 to-teal-600 flex items-center justify-center shadow-lg shadow-teal-200 shrink-0">
+              <FlaskConical className="w-5 h-5 text-white" strokeWidth={2.25} />
+              <div className="absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/20" />
+            </div>
             <div>
-              <h1 className={`${sansCls} text-[22px] leading-tight font-semibold`} style={{ color: ink }}>
-                টেস্ট কনফিগারেশন
-              </h1>
-              <p className={`${sansCls} text-[13px] mt-0.5`} style={{ color: sub }}>
-                কক্ষ নম্বর সরাসরি বদলান; ফরম্যাট ও রেঞ্জ এক ক্লিকে দেখুন ও সম্পাদনা করুন
+              <h1 className="text-[22px] font-black text-slate-900 tracking-tight leading-tight">টেস্ট কনফিগারেশন</h1>
+              <p className="text-[13.5px] text-slate-400 mt-0.5">
+                কক্ষ নম্বর সরাসরি বদলান; ফরম্যাট ও রেঞ্জ এক ক্লিকে দেখুন ও Edit করুন
               </p>
             </div>
           </div>
           <Link
             to="/setup"
-            className={`${sansCls} ${focusRing} flex items-center gap-1.5 text-[13px] shrink-0 rounded py-1`}
-            style={{ color: sub, ...focusStyle }}
+            className={`${focusRing} flex items-center gap-1.5 text-[13px] shrink-0 rounded-lg py-1 text-slate-400 hover:text-slate-600 transition-colors`}
           >
             <ArrowLeft className="w-3.5 h-3.5" /> ফিরে যান
           </Link>
@@ -1131,14 +1129,15 @@ const TestConfigPage = () => {
             {/* search + status filter */}
             <div className="flex flex-col sm:flex-row gap-3 mb-5">
               <div className="relative flex-1">
-                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: sub }} />
+                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
                   placeholder="টেস্টের নাম খুঁজুন…"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className={`${sansCls} text-[14px] rounded-xl pl-10 ${search ? "pr-10" : "pr-4"} py-3 w-full outline-none focus:ring-2`}
-                  style={{ ...fieldStyle, "--tw-ring-color": accentLine }}
+                  className={`text-[14px] rounded-xl pl-10 ${
+                    search ? "pr-10" : "pr-4"
+                  } py-3 w-full outline-none border border-slate-200 bg-white text-slate-800 focus:ring-2 focus:ring-teal-100 focus:border-teal-300 transition-shadow`}
                 />
                 {search && (
                   <button
@@ -1146,28 +1145,26 @@ const TestConfigPage = () => {
                     aria-label="মুছুন"
                     className="absolute right-3.5 top-1/2 -translate-y-1/2"
                   >
-                    <X className="w-4 h-4" style={{ color: sub }} />
+                    <X className="w-4 h-4 text-slate-400" />
                   </button>
                 )}
               </div>
               <div className="flex gap-1.5 items-center" role="group" aria-label="স্ট্যাটাস ফিল্টার">
                 {STATUS_FILTERS.map(({ id, label, icon: Icon }) => {
                   const active = statusFilter === id;
-                  const activeBg = id === "online" ? green : accent;
+                  const activeCls =
+                    id === "online" ? "bg-emerald-500 border-emerald-500" : "bg-teal-600 border-teal-600";
                   return (
                     <button
                       key={id}
                       type="button"
                       onClick={() => setStatusFilter(id)}
                       aria-pressed={active}
-                      className={`${sansCls} ${focusRing} inline-flex items-center gap-1.5 text-[13px] rounded-full px-3.5 py-2 transition-colors whitespace-nowrap`}
-                      style={{
-                        background: active ? activeBg : "#fff",
-                        color: active ? "#fff" : sub,
-                        border: `1px solid ${active ? activeBg : line}`,
-                        fontWeight: active ? 600 : 400,
-                        ...focusStyle,
-                      }}
+                      className={`${focusRing} inline-flex items-center gap-1.5 text-[13px] rounded-full px-3.5 py-2 transition-colors whitespace-nowrap border ${
+                        active
+                          ? `${activeCls} text-white font-semibold shadow-sm`
+                          : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
+                      }`}
                     >
                       {Icon && <Icon className="w-3.5 h-3.5" />}
                       {label} {counts[id]}
@@ -1178,11 +1175,9 @@ const TestConfigPage = () => {
             </div>
 
             {groups.length === 0 ? (
-              <p className={`${sansCls} text-[14px] py-10 text-center`} style={{ color: sub }}>
-                কোনো টেস্ট পাওয়া যায়নি।
-              </p>
+              <p className="text-[14px] py-10 text-center text-slate-400">কোনো টেস্ট পাওয়া যায়নি।</p>
             ) : (
-              groups.map(({ category, tests: categoryTests }) => (
+              groups.map(({ category, tests: categoryTests }, idx) => (
                 <CategoryGroup
                   key={category._id}
                   category={category}
@@ -1194,12 +1189,27 @@ const TestConfigPage = () => {
                   onTestSaved={handleTestSaved}
                   onNetworkError={handleNetworkError}
                   onSetCategoryRoom={handleSetCategoryRoom}
+                  animDelay={idx * 40}
                 />
               ))
             )}
           </>
         )}
       </div>
+
+      <style>{`
+        @keyframes cardIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes modalIn {
+          from { opacity: 0; transform: translateY(8px) scale(.98); }
+          to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          [class*="animate-\\[cardIn"], [class*="animate-\\[modalIn"] { animation: none !important; }
+        }
+      `}</style>
     </section>
   );
 };
