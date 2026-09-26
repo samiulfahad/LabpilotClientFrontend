@@ -236,41 +236,97 @@ function StatusBox({ status, label }) {
   );
 }
 
+// ─── Row cell-merge planning ─────────────────────────────────────────────
+// Builds the merged cell layout for one parameter row: any column with no
+// data for THIS row (no unit, no reference content, no status) folds its
+// colSpan backward into the nearest populated cell to its left instead of
+// rendering its own empty "—" cell. Shared by the on-screen table and the
+// print-HTML builder so both merge identically. Only columns the section
+// actually has (hasUnits / hasStatus) are considered slots to begin with.
+function planRowCells({ hasUnits, unit, hasStatus, status, refHasContent }) {
+  const slots = [{ key: "result", content: true }];
+  if (hasUnits) slots.push({ key: "unit", content: Boolean(unit) });
+  slots.push({ key: "ref", content: refHasContent });
+  if (hasStatus) slots.push({ key: "status", content: Boolean(status) });
+
+  const cells = [];
+  slots.forEach((slot) => {
+    if (slot.content) {
+      cells.push({ key: slot.key, span: 1 });
+    } else if (cells.length) {
+      cells[cells.length - 1].span += 1;
+    } else {
+      cells.push({ key: slot.key, span: 1 });
+    }
+  });
+  return cells;
+}
+
 function ParamRow({ name, field, hasUnits, hasStatus, isAlt, smart }) {
   const value = formatValue(field);
   const unit = field.unit || "";
   const tierGroups = Array.isArray(field.referenceTiers) && field.referenceTiers.length ? field.referenceTiers : null;
   const ref = tierGroups ? null : getRefDisplay(field);
   const status = hasEvaluableStatus(field) ? getStatus(field) : null;
+  const refHasContent = Boolean(tierGroups) || (Array.isArray(ref) ? ref.length > 0 : Boolean(ref));
+
+  const cells = planRowCells({ hasUnits, unit, hasStatus, status, refHasContent });
+
   return (
     <tr className={isAlt ? "bg-gray-50" : "bg-white"}>
       <td className="pl-4 pr-3 py-2.5 text-sm text-black border-b border-r border-black">{name}</td>
-      <td className="px-3 py-2.5 text-sm font-bold text-black border-b border-r border-black tabular-nums">
-        {value || <span className="text-gray-300 font-normal">—</span>}
-      </td>
-      {hasUnits && (
-        <td className="px-3 py-2.5 text-[11px] font-semibold text-black border-b border-r border-black">
-          {unit || <span className="text-gray-300">—</span>}
-        </td>
-      )}
-      <td
-        className={`text-xs text-black border-b border-black tabular-nums align-top ${hasStatus ? "border-r" : ""} ${
-          tierGroups || Array.isArray(ref) ? "p-0" : "px-3 py-2.5"
-        }`}
-      >
-        {tierGroups ? (
-          <RefTierBox groups={tierGroups} smart={smart} />
-        ) : Array.isArray(ref) ? (
-          <RefKeyValueBox groups={ref} />
-        ) : (
-          ref || <span className="text-gray-300">—</span>
-        )}
-      </td>
-      {hasStatus && (
-        <td className="px-3 pr-4 py-2.5 border-b border-black">
-          <StatusBox status={status} label={field.referenceTag} />
-        </td>
-      )}
+      {cells.map((cell, i) => {
+        const isLast = i === cells.length - 1;
+        const borderCls = isLast ? "border-b border-black" : "border-b border-r border-black";
+
+        if (cell.key === "result") {
+          return (
+            <td
+              key={cell.key}
+              colSpan={cell.span}
+              className={`px-3 py-2.5 text-sm font-bold text-black ${borderCls} tabular-nums`}
+            >
+              {value || <span className="text-gray-300 font-normal">—</span>}
+            </td>
+          );
+        }
+        if (cell.key === "unit") {
+          return (
+            <td
+              key={cell.key}
+              colSpan={cell.span}
+              className={`px-3 py-2.5 text-[11px] font-semibold text-black ${borderCls}`}
+            >
+              {unit || <span className="text-gray-300">—</span>}
+            </td>
+          );
+        }
+        if (cell.key === "ref") {
+          return (
+            <td
+              key={cell.key}
+              colSpan={cell.span}
+              className={`text-xs text-black ${borderCls} tabular-nums align-top ${
+                tierGroups || Array.isArray(ref) ? "p-0" : "px-3 py-2.5"
+              }`}
+            >
+              {tierGroups ? (
+                <RefTierBox groups={tierGroups} smart={smart} />
+              ) : Array.isArray(ref) ? (
+                <RefKeyValueBox groups={ref} />
+              ) : (
+                ref || <span className="text-gray-300">—</span>
+              )}
+            </td>
+          );
+        }
+        // "status"
+        return (
+          <td key={cell.key} colSpan={cell.span} className={`px-3 pr-4 py-2.5 ${borderCls}`}>
+            <StatusBox status={status} label={field.referenceTag} />
+          </td>
+        );
+      })}
     </tr>
   );
 }
@@ -423,16 +479,38 @@ function buildPrintHTML({ reportName, shortId, patient, labInfo, sections, print
         const status = hasEvaluableStatus(field) ? getStatus(field) : null;
         const rowBg = i % 2 === 1 ? "bg-gray-50" : "bg-white";
         const refIsBoxed = Boolean(tierGroups) || Array.isArray(ref);
-        const refBorder = hasStatus ? "border-r border-black" : "";
-        const refCellClass = refIsBoxed
-          ? `text-[11px] text-black border-b ${refBorder} align-top p-0`
-          : `py-[7px] px-3 text-[11px] text-black border-b ${refBorder} align-top`;
+        const refHasContent = Boolean(tierGroups) || (Array.isArray(ref) ? ref.length > 0 : Boolean(ref));
+
+        // Any column with no content for this row (no unit, no reference
+        // content, no status) merges its colSpan backward into the
+        // nearest populated cell to its left.
+        const cells = planRowCells({ hasUnits, unit, hasStatus, status, refHasContent });
+
+        const cellsHtml = cells
+          .map((cell, ci) => {
+            const isLast = ci === cells.length - 1;
+            const borderCls = isLast ? "border-b border-black" : "border-b border-r border-black";
+            const spanAttr = cell.span > 1 ? ` colspan="${cell.span}"` : "";
+
+            if (cell.key === "result") {
+              return `<td${spanAttr} class="py-[7px] px-3 text-xs font-bold text-black ${borderCls}">${value || "—"}</td>`;
+            }
+            if (cell.key === "unit") {
+              return `<td${spanAttr} class="py-[7px] px-3 text-[10px] font-semibold text-black ${borderCls}">${unit || "—"}</td>`;
+            }
+            if (cell.key === "ref") {
+              const refCellClass = refIsBoxed
+                ? `text-[11px] text-black ${borderCls} align-top p-0`
+                : `py-[7px] px-3 text-[11px] text-black ${borderCls} align-top`;
+              return `<td${spanAttr} class="${refCellClass}">${refHtml}</td>`;
+            }
+            return `<td${spanAttr} class="py-[7px] px-3 ${borderCls}">${statusHtml(status, field.referenceTag)}</td>`;
+          })
+          .join("");
+
         return `<tr class="${rowBg}">
         <td class="py-[7px] px-3 text-xs text-black border-b border-r border-black">${name}</td>
-        <td class="py-[7px] px-3 text-xs font-bold text-black border-b border-r border-black">${value || "—"}</td>
-        ${hasUnits ? `<td class="py-[7px] px-3 text-[10px] font-semibold text-black border-b border-r border-black">${unit || "—"}</td>` : ""}
-        <td class="${refCellClass}">${refHtml}</td>
-        ${hasStatus ? `<td class="py-[7px] px-3 border-b border-black">${statusHtml(status, field.referenceTag)}</td>` : ""}
+        ${cellsHtml}
       </tr>`;
       })
       .join("");

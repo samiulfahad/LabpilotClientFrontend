@@ -371,6 +371,38 @@ function RefTierBoxPDF({ groups, smart = true }) {
   );
 }
 
+// ─── Row cell-merge planning ─────────────────────────────────────────────
+// Builds the merged cell layout for one result row: any column that has
+// no data for THIS specific field (no unit, no reference content, no
+// status) folds its width backward into the nearest populated cell to
+// its left, instead of being drawn as its own empty "—" cell. Only
+// columns that exist at the section level (hasUnits / hasStatus) are
+// considered slots to begin with — this never adds columns the section
+// didn't already have.
+function buildRowGroups({ unit, hasUnits, tierGroups, refIsKV, ref, hasStatus, status, W }) {
+  const slots = [{ width: W.result, kind: "result" }];
+
+  if (hasUnits) slots.push({ width: W.unit, kind: unit ? "unit" : null });
+
+  if (tierGroups) slots.push({ width: W.ref, kind: "ref-tiers" });
+  else if (refIsKV) slots.push({ width: W.ref, kind: ref && ref.length ? "ref-kv" : null });
+  else slots.push({ width: W.ref, kind: ref ? "ref-plain" : null });
+
+  if (hasStatus) slots.push({ width: W.status, kind: status ? "status" : null });
+
+  const groups = [];
+  slots.forEach((slot) => {
+    if (slot.kind) {
+      groups.push({ width: slot.width, kind: slot.kind });
+    } else if (groups.length) {
+      groups[groups.length - 1].width += slot.width;
+    } else {
+      groups.push({ width: slot.width, kind: "result" });
+    }
+  });
+  return groups;
+}
+
 function PDFSection({ sectionName, sectionData, index, showHeader, smart = true }) {
   const entries = getSectionEntries(sectionData);
   const resultEntries = entries.filter(([, v]) => isResultField(v));
@@ -416,27 +448,63 @@ function PDFSection({ sectionName, sectionData, index, showHeader, smart = true 
             const ref = tierGroups ? null : field.referenceRange || field.referenceValue || "";
             const refIsKV = !tierGroups && Array.isArray(ref);
             const status = getStatus(field);
+
+            // Any column with no content for this row (no unit, no
+            // reference content, no status) merges its width backward
+            // into the nearest populated cell to its left.
+            const groups = buildRowGroups({ unit, hasUnits, tierGroups, refIsKV, ref, hasStatus, status, W });
+
             return (
               <View key={name} style={[s.tableRow, i % 2 === 1 && s.tableRowAlt]} wrap={!(tierGroups || refIsKV)}>
                 <Text style={[s.td, colFlex(W.param)]}>{name}</Text>
-                <Text style={[s.td, s.tdBold, colFlex(W.result)]}>{value || "—"}</Text>
-                {hasUnits && <Text style={[s.td, s.tdMuted, colFlex(W.unit)]}>{unit || "—"}</Text>}
-                {tierGroups ? (
-                  <View style={[hasStatus ? s.td : s.tdLast, colFlex(W.ref), { padding: 0 }]}>
-                    <RefTierBoxPDF groups={tierGroups} smart={smart} />
-                  </View>
-                ) : refIsKV ? (
-                  <View style={[hasStatus ? s.td : s.tdLast, colFlex(W.ref), { padding: 0 }]}>
-                    <RefKeyValueBoxPDF groups={ref} />
-                  </View>
-                ) : (
-                  <Text style={[hasStatus ? s.td : s.tdLast, s.tdMuted, colFlex(W.ref)]}>{ref || "—"}</Text>
-                )}
-                {hasStatus && (
-                  <View style={[s.tdLast, colFlex(W.status)]}>
-                    <StatusBoxPDF label={status} />
-                  </View>
-                )}
+                {groups.map((g, gi) => {
+                  const isLast = gi === groups.length - 1;
+                  const base = isLast ? s.tdLast : s.td;
+
+                  if (g.kind === "ref-tiers") {
+                    return (
+                      <View key={gi} style={[base, colFlex(g.width), { padding: 0 }]}>
+                        <RefTierBoxPDF groups={tierGroups} smart={smart} />
+                      </View>
+                    );
+                  }
+                  if (g.kind === "ref-kv") {
+                    return (
+                      <View key={gi} style={[base, colFlex(g.width), { padding: 0 }]}>
+                        <RefKeyValueBoxPDF groups={ref} />
+                      </View>
+                    );
+                  }
+                  if (g.kind === "status") {
+                    return (
+                      <View key={gi} style={[base, colFlex(g.width)]}>
+                        <StatusBoxPDF label={status} />
+                      </View>
+                    );
+                  }
+                  if (g.kind === "unit") {
+                    return (
+                      <Text key={gi} style={[base, s.tdMuted, colFlex(g.width)]}>
+                        {unit}
+                      </Text>
+                    );
+                  }
+                  if (g.kind === "ref-plain") {
+                    return (
+                      <Text key={gi} style={[base, s.tdMuted, colFlex(g.width)]}>
+                        {ref}
+                      </Text>
+                    );
+                  }
+                  // "result" — either the actual Result column, or the
+                  // Result column absorbing everything that had nothing
+                  // else to show.
+                  return (
+                    <Text key={gi} style={[base, s.tdBold, colFlex(g.width)]}>
+                      {value || "—"}
+                    </Text>
+                  );
+                })}
               </View>
             );
           })}
