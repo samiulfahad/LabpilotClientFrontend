@@ -100,7 +100,7 @@ const blurInput = (e) => {
 
 // ── FormField ──────────────────────────────────────────────────────────────────
 const FormField = ({ label, required, children }) => (
-  <div>
+  <div className="min-w-0">
     <label className="block mb-1.5 font-['IBM_Plex_Mono',monospace] text-[11px] font-semibold uppercase tracking-[0.06em] text-[#64748B]">
       {label}
       {required && <span className="text-[#EF4444] ml-[3px]">*</span>}
@@ -129,10 +129,10 @@ const ReferrerFormModal = ({ formData, onChange, onSubmit, onClose, saving, apiE
       <div className="flex flex-col max-h-[calc(100svh-96px)] overflow-hidden">
         {/* Header — fixed, never scrolls */}
         <div
-          className={`shrink-0 px-6 py-5 flex items-center justify-between border-b ${accentBorder}`}
+          className={`shrink-0 px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between gap-3 border-b ${accentBorder}`}
           style={{ background: `linear-gradient(135deg,${gradFrom}15 0%,${gradTo}08 100%)` }}
         >
-          <div className="flex items-center gap-3.5">
+          <div className="flex items-center gap-3 sm:gap-3.5 min-w-0">
             <div
               className={`flex items-center justify-center shrink-0 w-11 h-11 rounded-[14px] ${accentShadow}`}
               style={{ background: `linear-gradient(135deg,${gradFrom},${gradTo})` }}
@@ -143,27 +143,27 @@ const ReferrerFormModal = ({ formData, onChange, onSubmit, onClose, saving, apiE
                 <UserPlus className="w-[18px] h-[18px] text-white" />
               )}
             </div>
-            <div>
+            <div className="min-w-0">
               <p
                 className={`font-['IBM_Plex_Mono',monospace] text-[10px] font-bold uppercase tracking-[0.1em] mb-[2px] ${accentText}`}
               >
                 {isEdit ? "তথ্য সম্পাদনা" : "নতুন নিবন্ধন"}
               </p>
-              <p className="font-['IBM_Plex_Sans',sans-serif] text-base font-bold text-[#0F172A]">
-                {isEdit ? "মিডিয়া সম্পাদনা" : "মিডিয়া নিবন্ধন"}
+              <p className="font-['IBM_Plex_Sans',sans-serif] text-base font-bold text-[#0F172A] truncate">
+                {isEdit ? "মিডিয়া সম্পাদনা" : "মিডিয়া নিবন্ধন"}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="flex items-center justify-center w-8 h-8 rounded-[10px] text-[#94A3B8] border-[1.5px] border-[#E2E8F0] transition-all hover:bg-[#F1F5F9] hover:text-[#0F172A]"
+            className="flex items-center justify-center shrink-0 w-8 h-8 rounded-[10px] text-[#94A3B8] border-[1.5px] border-[#E2E8F0] transition-all hover:bg-[#F1F5F9] hover:text-[#0F172A]"
           >
             <X className="w-[15px] h-[15px]" />
           </button>
         </div>
 
         {/* Body — the ONLY scrollable region, fills remaining space */}
-        <div className="px-6 py-5 space-y-4 bg-[#F8FAFC] flex-1 min-h-0 overflow-y-auto">
+        <div className="px-4 sm:px-6 py-5 space-y-4 bg-[#F8FAFC] flex-1 min-h-0 overflow-y-auto">
           {/* Type selector */}
           <FormField label="ধরন" required>
             <div className="grid grid-cols-3 gap-2">
@@ -174,12 +174,12 @@ const ReferrerFormModal = ({ formData, onChange, onSubmit, onClose, saving, apiE
                     key={value}
                     type="button"
                     onClick={() => onChange("type", value)}
-                    className={`flex items-center gap-2 px-3 py-3 transition-all font-semibold rounded-xl border-[1.5px] font-['IBM_Plex_Mono',monospace] text-xs
+                    className={`flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 min-w-0 px-2 sm:px-3 py-3 transition-all font-semibold rounded-xl border-[1.5px] font-['IBM_Plex_Mono',monospace] text-xs
                       ${active ? `${bg} ${border} ${text}` : "bg-white border-[#E2E8F0] text-[#64748B]"}`}
                   >
                     <Icon className="w-[14px] h-[14px] shrink-0" />
-                    {label}
-                    {active && <Check className="w-[11px] h-[11px] ml-auto" />}
+                    <span className="truncate">{label}</span>
+                    {active && <Check className="w-[11px] h-[11px] shrink-0 sm:ml-auto" />}
                   </button>
                 );
               })}
@@ -187,13 +187,13 @@ const ReferrerFormModal = ({ formData, onChange, onSubmit, onClose, saving, apiE
           </FormField>
 
           {/* Name + Contact */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <FormField label="পূর্ণ নাম" required>
               <input
                 type="text"
                 value={formData.name || ""}
                 onChange={(e) => onChange("name", e.target.value)}
-                placeholder="মিডিয়ার নাম"
+                placeholder="মিডিয়ার নাম"
                 className={`${inputBase} px-3 py-2.5 text-sm`}
                 onFocus={focusInput}
                 onBlur={blurInput}
@@ -279,11 +279,11 @@ const ReferrerFormModal = ({ formData, onChange, onSubmit, onClose, saving, apiE
                           onChange("commissionType", type);
                           onChange("commissionValue", 0);
                         }}
-                        className={`flex items-center gap-2 px-3 py-3 transition-all font-semibold rounded-xl border-[1.5px] font-['IBM_Plex_Mono',monospace] text-xs
+                        className={`flex items-center justify-center sm:justify-start gap-2 min-w-0 px-2 sm:px-3 py-3 transition-all font-semibold rounded-xl border-[1.5px] font-['IBM_Plex_Mono',monospace] text-xs
                           ${active ? `${bg} ${border} ${text}` : "bg-white border-[#E2E8F0] text-[#64748B]"}`}
                       >
                         <Icon className="w-[14px] h-[14px] shrink-0" />
-                        {label}
+                        <span className="truncate">{label}</span>
                       </button>
                     );
                   })}
@@ -302,11 +302,11 @@ const ReferrerFormModal = ({ formData, onChange, onSubmit, onClose, saving, apiE
                     onBlur={blurInput}
                   />
                   {formData.commissionType === "percentage" ? (
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 font-['IBM_Plex_Mono',monospace] text-sm font-bold text-[#F59E0B]">
+                    <span className="absolute right-3 top-[20px] -translate-y-1/2 font-['IBM_Plex_Mono',monospace] text-sm font-bold text-[#F59E0B]">
                       %
                     </span>
                   ) : (
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 font-['IBM_Plex_Mono',monospace] text-sm font-bold text-[#0D9488]">
+                    <span className="absolute left-3 top-[20px] -translate-y-1/2 font-['IBM_Plex_Mono',monospace] text-sm font-bold text-[#0D9488]">
                       ৳
                     </span>
                   )}
@@ -324,12 +324,14 @@ const ReferrerFormModal = ({ formData, onChange, onSubmit, onClose, saving, apiE
         {/* Footer — fixed, never scrolls */}
         <div className="shrink-0 bg-white border-t border-[#E2E8F0]">
           {apiError && (
-            <div className="mx-6 mt-4 flex items-start gap-2.5 px-4 py-3 bg-[#EF444408] border-[1.5px] border-[#EF444430] rounded-xl">
+            <div className="mx-4 sm:mx-6 mt-4 flex items-start gap-2.5 px-4 py-3 bg-[#EF444408] border-[1.5px] border-[#EF444430] rounded-xl">
               <AlertTriangle className="w-[14px] h-[14px] text-[#EF4444] shrink-0 mt-[1px]" />
-              <span className="text-xs font-['IBM_Plex_Mono',monospace] text-[#EF4444]">{apiError}</span>
+              <span className="text-xs font-['IBM_Plex_Mono',monospace] text-[#EF4444] min-w-0 break-words">
+                {apiError}
+              </span>
             </div>
           )}
-          <div className="px-6 py-4 flex gap-3">
+          <div className="px-4 sm:px-6 py-4 flex gap-3">
             <button
               type="button"
               onClick={onClose}
@@ -408,33 +410,35 @@ const CommissionModal = ({ referrer, onClose, onSaved }) => {
       <div className="flex flex-col overflow-hidden">
         {/* Header */}
         <div
-          className="shrink-0 px-6 py-5 flex items-center justify-between border-b border-[#6366F120]"
+          className="shrink-0 px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between gap-3 border-b border-[#6366F120]"
           style={{ background: "linear-gradient(135deg,#6366F115 0%,#4F46E508 100%)" }}
         >
-          <div className="flex items-center gap-3.5">
+          <div className="flex items-center gap-3 sm:gap-3.5 min-w-0">
             <div
               className="flex items-center justify-center shrink-0 w-11 h-11 rounded-[14px]"
               style={{ background: "linear-gradient(135deg,#6366F1,#4F46E5)", boxShadow: "0 8px 20px #6366F140" }}
             >
               <BadgePercent className="w-[18px] h-[18px] text-white" />
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="font-['IBM_Plex_Mono',monospace] text-[10px] font-bold uppercase tracking-[0.1em] mb-[2px] text-[#6366F1]">
                 কমিশন সম্পাদনা
               </p>
-              <p className="font-['IBM_Plex_Sans',sans-serif] text-base font-bold text-[#0F172A]">{referrer.name}</p>
+              <p className="font-['IBM_Plex_Sans',sans-serif] text-base font-bold text-[#0F172A] truncate">
+                {referrer.name}
+              </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="flex items-center justify-center w-8 h-8 rounded-[10px] text-[#94A3B8] border-[1.5px] border-[#E2E8F0] transition-all hover:bg-[#F1F5F9] hover:text-[#0F172A]"
+            className="flex items-center justify-center shrink-0 w-8 h-8 rounded-[10px] text-[#94A3B8] border-[1.5px] border-[#E2E8F0] transition-all hover:bg-[#F1F5F9] hover:text-[#0F172A]"
           >
             <X className="w-[15px] h-[15px]" />
           </button>
         </div>
 
         {/* Body */}
-        <div className="px-6 py-5 space-y-4 bg-[#F8FAFC]">
+        <div className="px-4 sm:px-6 py-5 space-y-4 bg-[#F8FAFC]">
           <div className="border-[1.5px] border-[#E2E8F0] rounded-2xl overflow-hidden bg-white">
             <div className="px-4 py-3 flex items-center gap-2 border-b border-[#E2E8F0]">
               <BadgePercent className="w-[13px] h-[13px] text-[#6366F1]" />
@@ -468,11 +472,11 @@ const CommissionModal = ({ referrer, onClose, onSaved }) => {
                       key={type}
                       type="button"
                       onClick={() => selectType(type)}
-                      className={`flex items-center gap-2 px-3 py-3 transition-all font-semibold rounded-xl border-[1.5px] font-['IBM_Plex_Mono',monospace] text-xs
+                      className={`flex items-center justify-center sm:justify-start gap-2 min-w-0 px-2 sm:px-3 py-3 transition-all font-semibold rounded-xl border-[1.5px] font-['IBM_Plex_Mono',monospace] text-xs
                         ${active ? `${bg} ${border} ${text}` : "bg-white border-[#E2E8F0] text-[#64748B]"}`}
                     >
                       <Icon className="w-[14px] h-[14px] shrink-0" />
-                      {label}
+                      <span className="truncate">{label}</span>
                     </button>
                   );
                 })}
@@ -492,11 +496,11 @@ const CommissionModal = ({ referrer, onClose, onSaved }) => {
                   autoFocus
                 />
                 {commissionType === "percentage" ? (
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 font-['IBM_Plex_Mono',monospace] text-sm font-bold text-[#F59E0B]">
+                  <span className="absolute right-3 top-[20px] -translate-y-1/2 font-['IBM_Plex_Mono',monospace] text-sm font-bold text-[#F59E0B]">
                     %
                   </span>
                 ) : (
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 font-['IBM_Plex_Mono',monospace] text-sm font-bold text-[#0D9488]">
+                  <span className="absolute left-3 top-[20px] -translate-y-1/2 font-['IBM_Plex_Mono',monospace] text-sm font-bold text-[#0D9488]">
                     ৳
                   </span>
                 )}
@@ -513,12 +517,14 @@ const CommissionModal = ({ referrer, onClose, onSaved }) => {
         {/* Footer */}
         <div className="shrink-0 bg-white border-t border-[#E2E8F0]">
           {apiError && (
-            <div className="mx-6 mt-4 flex items-start gap-2.5 px-4 py-3 bg-[#EF444408] border-[1.5px] border-[#EF444430] rounded-xl">
+            <div className="mx-4 sm:mx-6 mt-4 flex items-start gap-2.5 px-4 py-3 bg-[#EF444408] border-[1.5px] border-[#EF444430] rounded-xl">
               <AlertTriangle className="w-[14px] h-[14px] text-[#EF4444] shrink-0 mt-[1px]" />
-              <span className="text-xs font-['IBM_Plex_Mono',monospace] text-[#EF4444]">{apiError}</span>
+              <span className="text-xs font-['IBM_Plex_Mono',monospace] text-[#EF4444] min-w-0 break-words">
+                {apiError}
+              </span>
             </div>
           )}
-          <div className="px-6 py-4 flex gap-3">
+          <div className="px-4 sm:px-6 py-4 flex gap-3">
             <button
               type="button"
               onClick={onClose}
@@ -588,6 +594,13 @@ const Avatar = ({ name, color, bg }) => {
 };
 
 // ── Referrer Row — card style, mirrors StaffRow in ManageStaff ─────────────────
+//
+// Overflow strategy: the collapsed header is a single-line summary, so every
+// text node in it is `truncate` inside a `min-w-0` flex child (min-w-0 is what
+// lets a flex item shrink below its content width — without it `truncate`
+// does nothing and long names push past the card). The type badge stays
+// visible at all sizes (short label, shrink-0); the full name, degree and
+// details are shown wrapped in the expanded section.
 const ReferrerRow = ({ input, index, onEdit, onCommission, onDelete }) => {
   const [expanded, setExpanded] = useState(false);
   const cfg = TYPE_CONFIG[input.type] ?? TYPE_CONFIG.doctor;
@@ -598,16 +611,16 @@ const ReferrerRow = ({ input, index, onEdit, onCommission, onDelete }) => {
 
   return (
     <div
-      className="bg-white border border-[#E2E8F0] rounded-[14px] transition-shadow"
+      className="bg-white border border-[#E2E8F0] rounded-[14px] transition-shadow min-w-0"
       style={{ boxShadow: expanded ? "0 4px 14px rgba(15,23,42,0.08)" : "0 1px 2px rgba(15,23,42,0.03)" }}
     >
       <button onClick={() => setExpanded((v) => !v)} className="w-full text-left">
-        <div className="flex items-center gap-3 px-4 py-3.5">
+        <div className="flex items-center gap-2.5 sm:gap-3 px-3 sm:px-4 py-3.5">
           <Avatar name={input.name} color={cfg.color} bg={cfg.bg} />
 
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-['IBM_Plex_Sans',sans-serif] text-sm font-semibold text-[#0F172A] truncate">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="min-w-0 truncate font-['IBM_Plex_Sans',sans-serif] text-sm font-semibold text-[#0F172A]">
                 {input.name}
               </span>
               <span
@@ -623,7 +636,7 @@ const ReferrerRow = ({ input, index, onEdit, onCommission, onDelete }) => {
           </div>
 
           <span
-            className={`shrink-0 flex items-center gap-1 px-3 py-1 rounded-[20px] text-white font-['IBM_Plex_Mono',monospace] text-xs font-bold ${commShadow}`}
+            className={`shrink-0 flex items-center gap-1 px-2.5 sm:px-3 py-1 rounded-[20px] text-white font-['IBM_Plex_Mono',monospace] text-xs font-bold ${commShadow}`}
             style={{ background: commGrad }}
           >
             {isPercent ? <BadgePercent className="w-[11px] h-[11px]" /> : <Banknote className="w-[11px] h-[11px]" />}
@@ -637,16 +650,28 @@ const ReferrerRow = ({ input, index, onEdit, onCommission, onDelete }) => {
       </button>
 
       {expanded && (
-        <div className="px-4 pb-4 border-t border-[#E2E8F0]">
-          <div className="pt-3.5 space-y-3.5">
-            <div className="font-['IBM_Plex_Mono',monospace] text-xs text-[#64748B] leading-loose">
-              {input.contactNumber && (
-                <p className="flex items-center gap-1.5">
-                  <Phone className="w-3 h-3 text-[#6366F1]" />
-                  {input.contactNumber}
+        <div className="px-3 sm:px-4 pb-4 border-t border-[#E2E8F0]">
+          <div className="pt-3.5 space-y-3.5 min-w-0">
+            <div className="space-y-2 font-['IBM_Plex_Mono',monospace] text-xs text-[#64748B] leading-relaxed min-w-0">
+              {/* Full name — wraps, never truncated */}
+              <p className="font-['IBM_Plex_Sans',sans-serif] text-sm font-semibold text-[#0F172A] break-words [overflow-wrap:anywhere]">
+                {input.name}
+              </p>
+              {input.degree && (
+                <p className="flex items-start gap-1.5">
+                  <Stethoscope className="w-3 h-3 text-[#3B82F6] shrink-0 mt-[3px]" />
+                  <span className="min-w-0 break-words [overflow-wrap:anywhere]">{input.degree}</span>
                 </p>
               )}
-              {input.details && <p className="mt-[2px]">{input.details}</p>}
+              {input.contactNumber && (
+                <p className="flex items-start gap-1.5">
+                  <Phone className="w-3 h-3 text-[#6366F1] shrink-0 mt-[3px]" />
+                  <span className="min-w-0 break-words">{input.contactNumber}</span>
+                </p>
+              )}
+              {input.details && (
+                <p className="min-w-0 whitespace-pre-line break-words [overflow-wrap:anywhere]">{input.details}</p>
+              )}
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <ActionChip onClick={onEdit} icon={Pencil} label="Edit" color="#6366F1" />
@@ -661,18 +686,26 @@ const ReferrerRow = ({ input, index, onEdit, onCommission, onDelete }) => {
 };
 
 // ── Stat Card ──────────────────────────────────────────────────────────────────
-const StatCard = ({ label, value, color, grad, icon: Icon }) => (
-  <div className="bg-white relative overflow-hidden border border-[#E2E8F0] rounded-2xl p-[14px_16px] shadow-[0_2px_8px_rgba(15,23,42,0.05)]">
+const StatCard = ({ label, value, color, grad, icon: Icon, className = "" }) => (
+  <div
+    className={`bg-white relative overflow-hidden min-w-0 border border-[#E2E8F0] rounded-2xl p-[12px_14px] sm:p-[14px_16px] shadow-[0_2px_8px_rgba(15,23,42,0.05)] ${className}`}
+  >
     <div className="absolute top-0 right-0 w-16 h-16 opacity-5 rounded-[0_16px_0_100%]" style={{ background: grad }} />
-    <div className="flex items-center gap-2 mb-2">
-      <div className="flex items-center justify-center w-[26px] h-[26px] rounded-lg" style={{ background: grad }}>
+    <div className="flex items-center gap-2 mb-2 min-w-0">
+      <div
+        className="flex items-center justify-center shrink-0 w-[26px] h-[26px] rounded-lg"
+        style={{ background: grad }}
+      >
         <Icon className="w-[13px] h-[13px] text-white" />
       </div>
-      <p className="font-['IBM_Plex_Mono',monospace] text-[9px] font-bold uppercase tracking-[0.06em] text-[#94A3B8]">
+      <p className="min-w-0 truncate font-['IBM_Plex_Mono',monospace] text-[9px] font-bold uppercase tracking-[0.06em] text-[#94A3B8]">
         {label}
       </p>
     </div>
-    <p className="font-['IBM_Plex_Mono',monospace] text-[26px] font-extrabold leading-none" style={{ color }}>
+    <p
+      className="truncate font-['IBM_Plex_Mono',monospace] text-[22px] sm:text-[26px] font-extrabold leading-none"
+      style={{ color }}
+    >
       {value}
     </p>
   </div>
@@ -680,11 +713,11 @@ const StatCard = ({ label, value, color, grad, icon: Icon }) => (
 
 // ── Filter Dropdown ────────────────────────────────────────────────────────────
 const FilterDropdown = ({ value, onChange, options, placeholder }) => (
-  <div className="relative">
+  <div className="relative min-w-0 flex-1 sm:flex-none">
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className={`appearance-none outline-none cursor-pointer transition-all font-['IBM_Plex_Mono',monospace] text-xs rounded-[10px] py-[7px] pl-3 pr-[30px] border-[1.5px]
+      className={`w-full sm:w-auto sm:max-w-[200px] truncate appearance-none outline-none cursor-pointer transition-all font-['IBM_Plex_Mono',monospace] text-xs rounded-[10px] py-[7px] pl-3 pr-[30px] border-[1.5px]
         ${value !== "all" ? "border-[#6366F160] bg-[#6366F108] text-[#0F172A] shadow-[0_2px_8px_#6366F115]" : "border-[#E2E8F0] bg-white text-[#64748B]"}`}
     >
       <option value="all">{placeholder}</option>
@@ -704,14 +737,14 @@ const Skeleton = () => (
     {[1, 2, 3, 4].map((i) => (
       <div
         key={i}
-        className="flex items-center gap-3 px-4 py-3.5 bg-white border border-[#E2E8F0] rounded-[14px] animate-pulse"
+        className="flex items-center gap-3 px-3 sm:px-4 py-3.5 bg-white border border-[#E2E8F0] rounded-[14px] animate-pulse"
       >
         <div className="w-10 h-10 bg-[#E2E8F0] rounded-[9px] shrink-0" />
-        <div className="flex-1 space-y-2">
+        <div className="flex-1 min-w-0 space-y-2">
           <div className="h-3 w-2/5 bg-[#E2E8F0] rounded-md" />
           <div className="h-2.5 w-3/5 bg-[#EEF2FF] rounded-md" />
         </div>
-        <div className="w-[65px] h-[26px] bg-[#E2E8F0] rounded-[20px]" />
+        <div className="w-[65px] h-[26px] bg-[#E2E8F0] rounded-[20px] shrink-0" />
       </div>
     ))}
   </div>
@@ -733,7 +766,7 @@ const ManageReferrer = () => {
   // ═══════ Front-end permission check ═══════
   const hasAccess = isAdmin || user?.permissions?.manageReferrers === true;
   if (!hasAccess) {
-    return <Popup type="denied" message="মিডিয়া ম্যানেজমেন্ট দেখার অনুমতি আপনার নেই।" onClose={() => navigate("/")} />;
+    return <Popup type="denied" message="মিডিয়া ম্যানেজমেন্ট দেখার অনুমতি আপনার নেই।" onClose={() => navigate("/")} />;
   }
 
   const [referrers, setReferrers] = useState([]);
@@ -758,7 +791,7 @@ const ManageReferrer = () => {
       if (isNetworkError(err)) {
         setOfflinePopup(true);
       } else {
-        setPopup({ type: "error", message: getErrorMessage(err, "মিডিয়া লোড করতে ব্যর্থ।") });
+        setPopup({ type: "error", message: getErrorMessage(err, "মিডিয়া লোড করতে ব্যর্থ।") });
       }
     } finally {
       setInitialLoading(false);
@@ -816,7 +849,7 @@ const ManageReferrer = () => {
     if (atReferrerLimit) {
       setPopup({
         type: "error",
-        message: `আপনার ল্যাবে সর্বোচ্চ ${maxReferrer} জন মিডিয়া যোগ করা যাবে। সীমা পূর্ণ হয়েছে। সীমা বাড়াতে আমাদের সাথে যোগাযোগ করুন।`,
+        message: `আপনার ল্যাবে সর্বোচ্চ ${maxReferrer} জন মিডিয়া যোগ করা যাবে। সীমা পূর্ণ হয়েছে। সীমা বাড়াতে আমাদের সাথে যোগাযোগ করুন।`,
       });
       return;
     }
@@ -838,7 +871,7 @@ const ManageReferrer = () => {
     // check remains the authoritative guard for direct API access.
     if (!isEdit && atReferrerLimit) {
       return setFormApiError(
-        `আপনার ল্যাবে সর্বোচ্চ ${maxReferrer} জন মিডিয়া যোগ করা যাবে। সীমা পূর্ণ হয়েছে। সীমা বাড়াতে আমাদের সাথে যোগাযোগ করুন।`,
+        `আপনার ল্যাবে সর্বোচ্চ ${maxReferrer} জন মিডিয়া যোগ করা যাবে। সীমা পূর্ণ হয়েছে। সীমা বাড়াতে আমাদের সাথে যোগাযোগ করুন।`,
       );
     }
 
@@ -863,7 +896,7 @@ const ManageReferrer = () => {
         });
       }
       await loadReferrers();
-      setPopup({ type: "success", message: isEdit ? "মিডিয়া আপডেট হয়েছে।" : "মিডিয়া নিবন্ধিত হয়েছে।" });
+      setPopup({ type: "success", message: isEdit ? "মিডিয়া আপডেট হয়েছে।" : "মিডিয়া নিবন্ধিত হয়েছে।" });
       setFormModal(null);
     } catch (err) {
       if (isNetworkError(err)) {
@@ -894,7 +927,7 @@ const ManageReferrer = () => {
     try {
       await referrerService.deleteReferrer(_id);
       setReferrers((prev) => prev.filter((r) => r._id !== _id));
-      setPopup({ type: "success", message: "মিডিয়া ডিলিট করে ফেলা হয়েছে।" });
+      setPopup({ type: "success", message: "মিডিয়া ডিলিট করে ফেলা হয়েছে।" });
     } catch (err) {
       if (isNetworkError(err)) {
         setOfflinePopup(true);
@@ -907,7 +940,7 @@ const ManageReferrer = () => {
   const hasFilters = typeFilter !== "all";
 
   return (
-    <section className={`min-h-screen px-4 py-6 ${pageGradientBg} font-[Noto_Sans_Bengali,sans-serif]`}>
+    <section className={`min-h-screen px-3 sm:px-4 py-5 sm:py-6 ${pageGradientBg} font-[Noto_Sans_Bengali,sans-serif]`}>
       {popup && <Popup type={popup.type} message={popup.message} onClose={() => setPopup(null)} />}
       {offlinePopup && <Popup type="offline" onClose={() => setOfflinePopup(false)} />}
 
@@ -941,10 +974,10 @@ const ManageReferrer = () => {
         />
       )}
 
-      <div className="max-w-2xl mx-auto">
+      <div className="w-full min-w-0 max-w-2xl mx-auto">
         {/* Page header */}
-        <div className="flex items-start justify-between mb-6">
-          <div className="flex items-center gap-3">
+        <div className="flex items-start justify-between gap-3 mb-5 sm:mb-6">
+          <div className="flex items-center gap-3 min-w-0">
             <div
               className="w-11 h-11 flex items-center justify-center shrink-0 rounded-xl shadow-md"
               style={{
@@ -954,35 +987,38 @@ const ManageReferrer = () => {
             >
               <Users className="w-[18px] h-[18px] text-white" />
             </div>
-            <div>
-              <h1 className="font-['IBM_Plex_Sans',sans-serif] text-[22px] font-bold text-[#0F172A] leading-tight">
-                মিডিয়া তালিকা
+            <div className="min-w-0">
+              <h1 className="font-['IBM_Plex_Sans',sans-serif] text-xl sm:text-[22px] font-bold text-[#0F172A] leading-tight truncate">
+                মিডিয়া তালিকা
               </h1>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <Link
               to="/setup"
-              className="flex items-center gap-1.5 transition-all font-semibold px-[14px] py-2 border-[1.5px] border-[#E2E8F0] rounded-xl text-[#64748B] font-['IBM_Plex_Mono',monospace] text-xs bg-white hover:bg-[#F1F5F9] hover:text-[#0F172A]"
+              className="flex items-center gap-1.5 transition-all font-semibold px-3 sm:px-[14px] py-2 border-[1.5px] border-[#E2E8F0] rounded-xl text-[#64748B] font-['IBM_Plex_Mono',monospace] text-xs bg-white hover:bg-[#F1F5F9] hover:text-[#0F172A]"
             >
               <ArrowLeft className="w-[13px] h-[13px]" />
             </Link>
             <button
               onClick={handleAddReferrerClick}
               disabled={atReferrerLimit}
-              title={atReferrerLimit ? `মিডিয়া সীমা (${maxReferrer}) পূর্ণ হয়েছে` : undefined}
-              className="flex items-center gap-1.5 transition-all font-semibold px-4 py-2 rounded-xl text-white font-['IBM_Plex_Mono',monospace] text-xs border-none shadow-[0_4px_14px_rgba(99,102,241,0.4)] hover:shadow-[0_6px_20px_rgba(99,102,241,0.5)] disabled:opacity-60 disabled:shadow-none disabled:cursor-not-allowed"
+              title={atReferrerLimit ? `মিডিয়া সীমা (${maxReferrer}) পূর্ণ হয়েছে` : undefined}
+              className="flex items-center gap-1.5 transition-all font-semibold px-3 sm:px-4 py-2 rounded-xl text-white font-['IBM_Plex_Mono',monospace] text-xs border-none shadow-[0_4px_14px_rgba(99,102,241,0.4)] hover:shadow-[0_6px_20px_rgba(99,102,241,0.5)] disabled:opacity-60 disabled:shadow-none disabled:cursor-not-allowed"
               style={{ background: atReferrerLimit ? "#94A3B8" : "linear-gradient(135deg,#6366F1,#4F46E5)" }}
             >
               {atReferrerLimit ? <Lock className="w-[13px] h-[13px]" /> : <UserPlus className="w-[13px] h-[13px]" />}
-              New Media
+              <span className="whitespace-nowrap">New Media</span>
             </button>
           </div>
         </div>
 
-        {/* Stats */}
+        {/* Stats — 2 columns on mobile, 4/5 from sm. With a limit card the 5th
+            item spans the full mobile row so there's no lone half-width orphan. */}
         {!initialLoading && (
-          <div className={`grid grid-cols-4 ${maxReferrer !== null ? "sm:grid-cols-5" : ""} gap-3 mb-5`}>
+          <div
+            className={`grid grid-cols-2 ${maxReferrer !== null ? "sm:grid-cols-5" : "sm:grid-cols-4"} gap-2.5 sm:gap-3 mb-5`}
+          >
             <StatCard
               label="মোট"
               value={stats.total}
@@ -1013,6 +1049,7 @@ const ManageReferrer = () => {
             />
             {maxReferrer !== null && (
               <StatCard
+                className="col-span-2 sm:col-span-1"
                 label="সীমা"
                 value={`${stats.total}/${maxReferrer}`}
                 color={atReferrerLimit ? "#EF4444" : "#64748B"}
@@ -1030,16 +1067,17 @@ const ManageReferrer = () => {
         {atReferrerLimit && (
           <div className="flex items-start gap-2.5 px-3.5 py-2.5 mb-4 bg-[#FEF2F2] border-[1.5px] border-[#EF444430] rounded-xl">
             <Lock className="w-[13px] h-[13px] text-[#EF4444] mt-[1px] shrink-0" />
-            <p className="text-[11px] leading-[1.5] text-[#991B1B] font-[Noto_Sans_Bengali,sans-serif]">
-              আপনার ল্যাবে সর্বোচ্চ {maxReferrer} জন মিডিয়া যোগ করা যাবে এবং আপনি সীমায় পৌঁছেছেন। নতুন মিডিয়া যোগ
+            <p className="min-w-0 text-[11px] leading-[1.5] text-[#991B1B] font-[Noto_Sans_Bengali,sans-serif]">
+              আপনার ল্যাবে সর্বোচ্চ {maxReferrer} জন মিডিয়া যোগ করা যাবে এবং আপনি সীমায় পৌঁছেছেন। নতুন মিডিয়া যোগ
               করতে সীমা বাড়াতে আমাদের সাথে যোগাযোগ করুন।
             </p>
           </div>
         )}
 
-        {/* Toolbar card */}
-        <div className="px-4 py-3 flex flex-wrap items-center gap-2 mb-4 bg-white border border-[#E2E8F0] rounded-2xl">
-          <div className="relative flex-[1_1_160px]">
+        {/* Toolbar card — search takes its own full row on mobile, the filter
+            then sits below; on ≥sm everything sits inline. */}
+        <div className="px-3 sm:px-4 py-3 flex flex-wrap items-center gap-2 mb-4 bg-white border border-[#E2E8F0] rounded-2xl">
+          <div className="relative basis-full sm:basis-[160px] sm:flex-1 min-w-0">
             <Search className="w-[13px] h-[13px] text-[#94A3B8] absolute left-[11px] top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
@@ -1063,7 +1101,7 @@ const ManageReferrer = () => {
           {hasFilters && (
             <button
               onClick={() => setTypeFilter("all")}
-              className="flex items-center gap-1.5 transition-all font-semibold py-[7px] px-3 border-[1.5px] border-[#EF444430] rounded-[10px] text-[#EF4444] font-['IBM_Plex_Mono',monospace] text-[11px] bg-[#EF444406] hover:bg-[#EF444412]"
+              className="flex items-center justify-center gap-1.5 transition-all font-semibold py-[7px] px-3 border-[1.5px] border-[#EF444430] rounded-[10px] text-[#EF4444] font-['IBM_Plex_Mono',monospace] text-[11px] bg-[#EF444406] hover:bg-[#EF444412]"
             >
               <RotateCcw className="w-3 h-3" /> রিসেট
             </button>
@@ -1076,8 +1114,8 @@ const ManageReferrer = () => {
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 gap-2 text-[#94A3B8] bg-white border border-[#E2E8F0] rounded-2xl">
             <AlertCircle className="w-7 h-7 opacity-40" />
-            <p className="font-['IBM_Plex_Mono',monospace] text-xs">
-              {hasFilters || search ? "কোনো মিডিয়া পাওয়া যায়নি" : "এখনো কোনো মিডিয়া যোগ করা হয়নি"}
+            <p className="font-['IBM_Plex_Mono',monospace] text-xs text-center px-4">
+              {hasFilters || search ? "কোনো মিডিয়া পাওয়া যায়নি" : "এখনো কোনো মিডিয়া যোগ করা হয়নি"}
             </p>
           </div>
         ) : (
@@ -1097,7 +1135,7 @@ const ManageReferrer = () => {
 
         {/* Footer note */}
         <p className="font-['IBM_Plex_Mono',monospace] text-[10px] text-[#94A3B8] mt-4 text-center">
-          * সকল মিডিয়ার কমিশন প্রযোজ্য
+          * সকল মিডিয়ার কমিশন প্রযোজ্য
         </p>
       </div>
     </section>

@@ -23,6 +23,7 @@ import {
   AlertCircle,
   RotateCcw,
   Stethoscope,
+  Briefcase,
   Lock,
 } from "lucide-react";
 import Modal from "../../../components/modal";
@@ -104,7 +105,7 @@ const blurInput = (e) => {
 // ── Form Field ─────────────────────────────────────────────────────────────────
 
 const FormField = ({ label, required, children }) => (
-  <div>
+  <div className="min-w-0">
     <label className="block mb-1.5 font-['IBM_Plex_Mono',monospace] text-[11px] font-semibold uppercase tracking-[0.06em] text-[#64748B]">
       {label}
       {required && <span className="text-[#EF4444] ml-[3px]">*</span>}
@@ -133,7 +134,7 @@ const DepartmentMultiSelect = ({ departments, selected, onChange }) => {
   const selectedDepts = departments.filter((d) => selected.includes(d.value));
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative min-w-0">
       <div
         onClick={() => setOpen((o) => !o)}
         className={`min-h-[42px] w-full px-3 py-2 cursor-pointer flex flex-wrap items-center gap-1.5 transition-all rounded-xl border-[1.5px] bg-white font-['IBM_Plex_Mono',monospace] ${open ? "border-[#6366F1] shadow-[0_0_0_3px_#6366F120]" : "border-[#E2E8F0]"}`}
@@ -144,11 +145,12 @@ const DepartmentMultiSelect = ({ departments, selected, onChange }) => {
           selectedDepts.map((d) => (
             <span
               key={d.value}
-              className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#6366F115] border-[1.5px] border-[#6366F130] rounded-lg text-[#6366F1] text-[11px] font-['IBM_Plex_Mono',monospace] font-semibold"
+              className="inline-flex items-center gap-1 max-w-full min-w-0 px-2 py-0.5 bg-[#6366F115] border-[1.5px] border-[#6366F130] rounded-lg text-[#6366F1] text-[11px] font-['IBM_Plex_Mono',monospace] font-semibold"
             >
-              {d.label}
+              <span className="truncate min-w-0">{d.label}</span>
               <button
                 type="button"
+                className="shrink-0"
                 onClick={(e) => {
                   e.stopPropagation();
                   onChange(selected.filter((v) => v !== d.value));
@@ -188,14 +190,14 @@ const DepartmentMultiSelect = ({ departments, selected, onChange }) => {
                     key={d.value}
                     type="button"
                     onClick={() => toggle(d.value)}
-                    className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors text-[13px] font-['IBM_Plex_Mono',monospace] ${checked ? "bg-[#6366F108] text-[#6366F1]" : "text-[#0F172A] hover:bg-[#F1F5F9]"}`}
+                    className={`w-full flex items-start gap-2.5 px-3 py-2.5 text-left transition-colors text-[13px] font-['IBM_Plex_Mono',monospace] ${checked ? "bg-[#6366F108] text-[#6366F1]" : "text-[#0F172A] hover:bg-[#F1F5F9]"}`}
                   >
                     <span
-                      className={`flex items-center justify-center shrink-0 w-4 h-4 rounded-[5px] border-[1.5px] ${checked ? "border-[#6366F1] bg-[#6366F1]" : "border-[#CBD5E1]"}`}
+                      className={`flex items-center justify-center shrink-0 w-4 h-4 mt-[1px] rounded-[5px] border-[1.5px] ${checked ? "border-[#6366F1] bg-[#6366F1]" : "border-[#CBD5E1]"}`}
                     >
                       {checked && <Check className="w-[9px] h-[9px] text-white" />}
                     </span>
-                    {d.label}
+                    <span className="min-w-0 break-words">{d.label}</span>
                   </button>
                 );
               })
@@ -317,10 +319,10 @@ const DoctorFormModal = ({ initial, onClose, onSaved, departments, designations 
       <div className="flex flex-col max-h-[calc(100svh-96px)] overflow-hidden">
         {/* Header — fixed, never scrolls */}
         <div
-          className={`shrink-0 px-6 py-5 flex items-center justify-between border-b ${accentBorder}`}
+          className={`shrink-0 px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between gap-3 border-b ${accentBorder}`}
           style={{ background: `linear-gradient(135deg,${gradFrom}15 0%,${gradTo}08 100%)` }}
         >
-          <div className="flex items-center gap-3.5">
+          <div className="flex items-center gap-3 sm:gap-3.5 min-w-0">
             <div
               className="flex items-center justify-center shrink-0 w-11 h-11 rounded-[14px]"
               style={{
@@ -334,27 +336,27 @@ const DoctorFormModal = ({ initial, onClose, onSaved, departments, designations 
                 <UserPlus className="w-[18px] h-[18px] text-white" />
               )}
             </div>
-            <div>
+            <div className="min-w-0">
               <p
                 className={`font-['IBM_Plex_Mono',monospace] text-[10px] font-bold uppercase tracking-[0.1em] mb-[2px] ${accentText}`}
               >
                 {isEdit ? "তথ্য সম্পাদনা" : "নতুন নিবন্ধন"}
               </p>
-              <p className="font-['IBM_Plex_Sans',sans-serif] text-base font-bold text-[#0F172A]">
+              <p className="font-['IBM_Plex_Sans',sans-serif] text-base font-bold text-[#0F172A] truncate">
                 {isEdit ? "ডাক্তার সম্পাদনা" : "ডাক্তার নিবন্ধন"}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="flex items-center justify-center w-8 h-8 rounded-[10px] text-[#94A3B8] border-[1.5px] border-[#E2E8F0] transition-all hover:bg-[#F1F5F9] hover:text-[#0F172A]"
+            className="flex items-center justify-center shrink-0 w-8 h-8 rounded-[10px] text-[#94A3B8] border-[1.5px] border-[#E2E8F0] transition-all hover:bg-[#F1F5F9] hover:text-[#0F172A]"
           >
             <X className="w-[15px] h-[15px]" />
           </button>
         </div>
 
         {/* Body — the ONLY scrollable region, fills remaining space */}
-        <div className="px-6 py-5 space-y-4 bg-[#F8FAFC] flex-1 min-h-0 overflow-y-auto">
+        <div className="px-4 sm:px-6 py-5 space-y-4 bg-[#F8FAFC] flex-1 min-h-0 overflow-y-auto">
           <FormField label="পূর্ণ নাম" required>
             <input
               name="name"
@@ -367,7 +369,7 @@ const DoctorFormModal = ({ initial, onClose, onSaved, departments, designations 
               onBlur={blurInput}
             />
           </FormField>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <FormField label="ডিগ্রি">
               <input
                 name="degree"
@@ -398,7 +400,7 @@ const DoctorFormModal = ({ initial, onClose, onSaved, departments, designations 
                 name="designation"
                 value={form.designation}
                 onChange={handle}
-                className={`w-full appearance-none outline-none transition-all rounded-xl border-[1.5px] border-[#E2E8F0] bg-white font-['IBM_Plex_Mono',monospace] text-[13px] py-[10px] pl-3 pr-9 ${form.designation ? "text-[#0F172A]" : "text-[#94A3B8]"}`}
+                className={`w-full appearance-none outline-none transition-all rounded-xl border-[1.5px] border-[#E2E8F0] bg-white font-['IBM_Plex_Mono',monospace] text-[13px] py-[10px] pl-3 pr-9 truncate ${form.designation ? "text-[#0F172A]" : "text-[#94A3B8]"}`}
                 onFocus={focusInput}
                 onBlur={blurInput}
               >
@@ -468,11 +470,11 @@ const DoctorFormModal = ({ initial, onClose, onSaved, departments, designations 
                           set("commissionType", type);
                           set("commissionValue", "");
                         }}
-                        className={`flex items-center gap-2 px-3 py-3 transition-all font-semibold rounded-xl border-[1.5px] font-['IBM_Plex_Mono',monospace] text-xs
+                        className={`flex items-center justify-center sm:justify-start gap-2 px-2 sm:px-3 py-3 min-w-0 transition-all font-semibold rounded-xl border-[1.5px] font-['IBM_Plex_Mono',monospace] text-xs
                           ${active ? `${bg} ${border} ${text}` : "bg-white border-[#E2E8F0] text-[#64748B]"}`}
                       >
                         <Icon className="w-[14px] h-[14px] shrink-0" />
-                        {label}
+                        <span className="truncate">{label}</span>
                       </button>
                     );
                   })}
@@ -513,12 +515,14 @@ const DoctorFormModal = ({ initial, onClose, onSaved, departments, designations 
             buried at the top of a long form. */}
         <div className="shrink-0 bg-white border-t border-[#E2E8F0]">
           {apiError && (
-            <div className="mx-6 mt-4 flex items-start gap-2.5 px-4 py-3 bg-[#EF444408] border-[1.5px] border-[#EF444430] rounded-xl">
+            <div className="mx-4 sm:mx-6 mt-4 flex items-start gap-2.5 px-4 py-3 bg-[#EF444408] border-[1.5px] border-[#EF444430] rounded-xl">
               <AlertTriangle className="w-[14px] h-[14px] text-[#EF4444] shrink-0 mt-[1px]" />
-              <span className="text-xs font-['IBM_Plex_Mono',monospace] text-[#EF4444]">{apiError}</span>
+              <span className="text-xs font-['IBM_Plex_Mono',monospace] text-[#EF4444] min-w-0 break-words">
+                {apiError}
+              </span>
             </div>
           )}
-          <div className="px-6 py-4 flex gap-3">
+          <div className="px-4 sm:px-6 py-4 flex gap-3">
             <button
               type="button"
               onClick={onClose}
@@ -605,33 +609,35 @@ const CommissionModal = ({ doctor, onClose, onSaved }) => {
       <div className="flex flex-col overflow-hidden">
         {/* Header */}
         <div
-          className="shrink-0 px-6 py-5 flex items-center justify-between border-b border-[#6366F120]"
+          className="shrink-0 px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between gap-3 border-b border-[#6366F120]"
           style={{ background: "linear-gradient(135deg,#6366F115 0%,#4F46E508 100%)" }}
         >
-          <div className="flex items-center gap-3.5">
+          <div className="flex items-center gap-3 sm:gap-3.5 min-w-0">
             <div
               className="flex items-center justify-center shrink-0 w-11 h-11 rounded-[14px]"
               style={{ background: "linear-gradient(135deg,#6366F1,#4F46E5)", boxShadow: "0 8px 20px #6366F140" }}
             >
               <BadgePercent className="w-[18px] h-[18px] text-white" />
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="font-['IBM_Plex_Mono',monospace] text-[10px] font-bold uppercase tracking-[0.1em] mb-[2px] text-[#6366F1]">
                 কমিশন সম্পাদনা
               </p>
-              <p className="font-['IBM_Plex_Sans',sans-serif] text-base font-bold text-[#0F172A]">{doctor.name}</p>
+              <p className="font-['IBM_Plex_Sans',sans-serif] text-base font-bold text-[#0F172A] truncate">
+                {doctor.name}
+              </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="flex items-center justify-center w-8 h-8 rounded-[10px] text-[#94A3B8] border-[1.5px] border-[#E2E8F0] transition-all hover:bg-[#F1F5F9] hover:text-[#0F172A]"
+            className="flex items-center justify-center shrink-0 w-8 h-8 rounded-[10px] text-[#94A3B8] border-[1.5px] border-[#E2E8F0] transition-all hover:bg-[#F1F5F9] hover:text-[#0F172A]"
           >
             <X className="w-[15px] h-[15px]" />
           </button>
         </div>
 
         {/* Body */}
-        <div className="px-6 py-5 space-y-4 bg-[#F8FAFC]">
+        <div className="px-4 sm:px-6 py-5 space-y-4 bg-[#F8FAFC]">
           <div className="border-[1.5px] border-[#E2E8F0] rounded-2xl overflow-hidden bg-white">
             <div className="px-4 py-3 flex items-center gap-2 border-b border-[#E2E8F0]">
               <BadgePercent className="w-[13px] h-[13px] text-[#6366F1]" />
@@ -665,11 +671,11 @@ const CommissionModal = ({ doctor, onClose, onSaved }) => {
                       key={type}
                       type="button"
                       onClick={() => selectType(type)}
-                      className={`flex items-center gap-2 px-3 py-3 transition-all font-semibold rounded-xl border-[1.5px] font-['IBM_Plex_Mono',monospace] text-xs
+                      className={`flex items-center justify-center sm:justify-start gap-2 px-2 sm:px-3 py-3 min-w-0 transition-all font-semibold rounded-xl border-[1.5px] font-['IBM_Plex_Mono',monospace] text-xs
                         ${active ? `${bg} ${border} ${text}` : "bg-white border-[#E2E8F0] text-[#64748B]"}`}
                     >
                       <Icon className="w-[14px] h-[14px] shrink-0" />
-                      {label}
+                      <span className="truncate">{label}</span>
                     </button>
                   );
                 })}
@@ -705,12 +711,14 @@ const CommissionModal = ({ doctor, onClose, onSaved }) => {
         {/* Footer */}
         <div className="shrink-0 bg-white border-t border-[#E2E8F0]">
           {apiError && (
-            <div className="mx-6 mt-4 flex items-start gap-2.5 px-4 py-3 bg-[#EF444408] border-[1.5px] border-[#EF444430] rounded-xl">
+            <div className="mx-4 sm:mx-6 mt-4 flex items-start gap-2.5 px-4 py-3 bg-[#EF444408] border-[1.5px] border-[#EF444430] rounded-xl">
               <AlertTriangle className="w-[14px] h-[14px] text-[#EF4444] shrink-0 mt-[1px]" />
-              <span className="text-xs font-['IBM_Plex_Mono',monospace] text-[#EF4444]">{apiError}</span>
+              <span className="text-xs font-['IBM_Plex_Mono',monospace] text-[#EF4444] min-w-0 break-words">
+                {apiError}
+              </span>
             </div>
           )}
-          <div className="px-6 py-4 flex gap-3">
+          <div className="px-4 sm:px-6 py-4 flex gap-3">
             <button
               type="button"
               onClick={onClose}
@@ -779,43 +787,51 @@ const Avatar = ({ name }) => {
 };
 
 // ── Doctor Row — card style, mirrors ReferrerRow / StaffRow ────────────────────
+//
+// Overflow strategy: the collapsed header is a single-line summary, so every
+// text node in it is `truncate` inside a `min-w-0` flex child (min-w-0 is what
+// lets a flex item shrink below its content width — without it `truncate`
+// does nothing and long names push past the card). The full, untruncated name,
+// degree, designation and departments are shown wrapped in the expanded
+// section, so nothing is lost on small screens.
 
 const DoctorRow = ({ doctor, deptLabelMap, desigLabelMap, onEdit, onCommission, onDelete }) => {
   const [expanded, setExpanded] = useState(false);
   const isPercent = doctor.commissionType === "percentage";
   const commGrad = isPercent ? "linear-gradient(135deg,#F59E0B,#D97706)" : "linear-gradient(135deg,#0D9488,#0F766E)";
   const commShadow = isPercent ? "shadow-[0_3px_8px_#F59E0B30]" : "shadow-[0_3px_8px_#0D948830]";
+  const designationLabel = doctor.designation ? (desigLabelMap[doctor.designation] ?? doctor.designation) : "";
 
   return (
     <div
-      className="bg-white border border-[#E2E8F0] rounded-[14px] transition-shadow"
+      className="bg-white border border-[#E2E8F0] rounded-[14px] transition-shadow min-w-0"
       style={{ boxShadow: expanded ? "0 4px 14px rgba(15,23,42,0.08)" : "0 1px 2px rgba(15,23,42,0.03)" }}
     >
       <button onClick={() => setExpanded((v) => !v)} className="w-full text-left">
-        <div className="flex items-center gap-3 px-4 py-3.5">
+        <div className="flex items-center gap-2.5 sm:gap-3 px-3 sm:px-4 py-3.5">
           <Avatar name={doctor.name} />
 
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-['IBM_Plex_Sans',sans-serif] text-sm font-semibold text-[#0F172A] truncate">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="min-w-0 truncate font-['IBM_Plex_Sans',sans-serif] text-sm font-semibold text-[#0F172A]">
                 {doctor.name}
               </span>
+              {/* Degree badge: desktop only in the collapsed row (on mobile it
+                  lives in the expanded section, where it can wrap). */}
               {doctor.degree && (
-                <span className="shrink-0 inline-flex items-center gap-1 px-1.5 py-[2px] rounded-md border-[1.5px] font-['IBM_Plex_Mono',monospace] text-[9.5px] font-bold bg-[#0D948815] border-[#0D948830] text-[#0D9488]">
-                  <Stethoscope className="w-[9px] h-[9px]" />
-                  {doctor.degree}
+                <span className="hidden sm:inline-flex items-center gap-1 shrink-0 max-w-[40%] px-1.5 py-[2px] rounded-md border-[1.5px] font-['IBM_Plex_Mono',monospace] text-[9.5px] font-bold bg-[#0D948815] border-[#0D948830] text-[#0D9488]">
+                  <Stethoscope className="w-[9px] h-[9px] shrink-0" />
+                  <span className="truncate">{doctor.degree}</span>
                 </span>
               )}
             </div>
             <p className="font-['IBM_Plex_Mono',monospace] text-[10.5px] text-[#94A3B8] mt-0.5 truncate">
-              {(doctor.designation && (desigLabelMap[doctor.designation] ?? doctor.designation)) ||
-                doctor.contactNumber ||
-                "—"}
+              {designationLabel || doctor.degree || doctor.contactNumber || "—"}
             </p>
           </div>
 
           <span
-            className={`shrink-0 flex items-center gap-1 px-3 py-1 rounded-[20px] text-white font-['IBM_Plex_Mono',monospace] text-xs font-bold ${commShadow}`}
+            className={`shrink-0 flex items-center gap-1 px-2.5 sm:px-3 py-1 rounded-[20px] text-white font-['IBM_Plex_Mono',monospace] text-xs font-bold ${commShadow}`}
             style={{ background: commGrad }}
           >
             {isPercent ? <BadgePercent className="w-[11px] h-[11px]" /> : <Banknote className="w-[11px] h-[11px]" />}
@@ -829,20 +845,45 @@ const DoctorRow = ({ doctor, deptLabelMap, desigLabelMap, onEdit, onCommission, 
       </button>
 
       {expanded && (
-        <div className="px-4 pb-4 border-t border-[#E2E8F0]">
-          <div className="pt-3.5 space-y-3.5">
-            <div className="font-['IBM_Plex_Mono',monospace] text-xs text-[#64748B] leading-loose">
+        <div className="px-3 sm:px-4 pb-4 border-t border-[#E2E8F0]">
+          <div className="pt-3.5 space-y-3.5 min-w-0">
+            <div className="space-y-2 font-['IBM_Plex_Mono',monospace] text-xs text-[#64748B] leading-relaxed min-w-0">
+              {/* Full name — wraps, never truncated */}
+              <p className="font-['IBM_Plex_Sans',sans-serif] text-sm font-semibold text-[#0F172A] break-words [overflow-wrap:anywhere]">
+                {doctor.name}
+              </p>
+              {doctor.degree && (
+                <p className="flex items-start gap-1.5">
+                  <Stethoscope className="w-3 h-3 text-[#0D9488] shrink-0 mt-[3px]" />
+                  <span className="min-w-0 break-words [overflow-wrap:anywhere]">{doctor.degree}</span>
+                </p>
+              )}
+              {designationLabel && (
+                <p className="flex items-start gap-1.5">
+                  <Briefcase className="w-3 h-3 text-[#6366F1] shrink-0 mt-[3px]" />
+                  <span className="min-w-0 break-words [overflow-wrap:anywhere]">{designationLabel}</span>
+                </p>
+              )}
               {doctor.contactNumber && (
-                <p className="flex items-center gap-1.5">
-                  <Phone className="w-3 h-3 text-[#6366F1]" />
-                  {doctor.contactNumber}
+                <p className="flex items-start gap-1.5">
+                  <Phone className="w-3 h-3 text-[#6366F1] shrink-0 mt-[3px]" />
+                  <span className="min-w-0 break-words">{doctor.contactNumber}</span>
                 </p>
               )}
               {doctor.departments?.length > 0 && (
-                <p className="flex items-center gap-1.5 flex-wrap mt-[2px]">
-                  <Layers className="w-3 h-3 text-[#6366F1] shrink-0" />
-                  {doctor.departments.map((d) => deptLabelMap[d] ?? d).join(" · ")}
-                </p>
+                <div className="flex items-start gap-1.5">
+                  <Layers className="w-3 h-3 text-[#6366F1] shrink-0 mt-[6px]" />
+                  <div className="flex flex-wrap gap-1.5 min-w-0">
+                    {doctor.departments.map((d) => (
+                      <span
+                        key={d}
+                        className="max-w-full px-2 py-[2px] rounded-md border-[1.5px] border-[#6366F125] bg-[#6366F108] text-[11px] font-semibold text-[#4F46E5] break-words [overflow-wrap:anywhere]"
+                      >
+                        {deptLabelMap[d] ?? d}
+                      </span>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
             <div className="flex items-center gap-2 flex-wrap">
@@ -885,7 +926,7 @@ const Pagination = ({ page, totalPages, onPage }) => {
   );
 
   return (
-    <div className="flex items-center justify-center gap-1.5">
+    <div className="flex items-center justify-center flex-wrap gap-1.5">
       <Btn onClick={() => onPage(page - 1)} disabled={page === 1}>
         <ChevronLeft className="w-[14px] h-[14px]" />
       </Btn>
@@ -914,13 +955,16 @@ const Pagination = ({ page, totalPages, onPage }) => {
 };
 
 // ── Filter Dropdown ────────────────────────────────────────────────────────────
+// On mobile the two filters share a row (flex-1, each ~half width) and long
+// option labels truncate inside the select; on ≥sm they size to content with
+// a max width so a long department name can't blow the toolbar out.
 
 const FilterDropdown = ({ value, onChange, options, placeholder }) => (
-  <div className="relative">
+  <div className="relative min-w-0 flex-1 sm:flex-none">
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className={`appearance-none outline-none cursor-pointer transition-all font-['IBM_Plex_Mono',monospace] text-xs rounded-[10px] py-[7px] pl-3 pr-[30px] border-[1.5px]
+      className={`w-full sm:w-auto sm:max-w-[200px] truncate appearance-none outline-none cursor-pointer transition-all font-['IBM_Plex_Mono',monospace] text-xs rounded-[10px] py-[7px] pl-3 pr-[30px] border-[1.5px]
         ${value !== "all" ? "border-[#6366F160] bg-[#6366F108] text-[#0F172A] shadow-[0_2px_8px_#6366F115]" : "border-[#E2E8F0] bg-white text-[#64748B]"}`}
     >
       <option value="all">{placeholder}</option>
@@ -941,14 +985,14 @@ const Skeleton = () => (
     {[1, 2, 3, 4].map((i) => (
       <div
         key={i}
-        className="flex items-center gap-3 px-4 py-3.5 bg-white border border-[#E2E8F0] rounded-[14px] animate-pulse"
+        className="flex items-center gap-3 px-3 sm:px-4 py-3.5 bg-white border border-[#E2E8F0] rounded-[14px] animate-pulse"
       >
         <div className="w-10 h-10 bg-[#E2E8F0] rounded-[9px] shrink-0" />
-        <div className="flex-1 space-y-2">
+        <div className="flex-1 min-w-0 space-y-2">
           <div className="h-3 w-2/5 bg-[#E2E8F0] rounded-md" />
           <div className="h-2.5 w-3/5 bg-[#EEF2FF] rounded-md" />
         </div>
-        <div className="w-[65px] h-[26px] bg-[#E2E8F0] rounded-[20px]" />
+        <div className="w-[65px] h-[26px] bg-[#E2E8F0] rounded-[20px] shrink-0" />
       </div>
     ))}
   </div>
@@ -956,21 +1000,26 @@ const Skeleton = () => (
 
 // ── Stats Card ─────────────────────────────────────────────────────────────────
 
-const StatCard = ({ label, value, color, grad, icon: Icon }) => (
-  <div className="bg-white relative overflow-hidden border border-[#E2E8F0] rounded-2xl p-[14px_16px] shadow-[0_2px_8px_rgba(15,23,42,0.05)]">
+const StatCard = ({ label, value, color, grad, icon: Icon, className = "" }) => (
+  <div
+    className={`bg-white relative overflow-hidden min-w-0 border border-[#E2E8F0] rounded-2xl p-[12px_14px] sm:p-[14px_16px] shadow-[0_2px_8px_rgba(15,23,42,0.05)] ${className}`}
+  >
     <div className="absolute top-0 right-0 w-16 h-16 opacity-5 rounded-[0_16px_0_100%]" style={{ background: grad }} />
-    <div className="flex items-center gap-2 mb-2">
+    <div className="flex items-center gap-2 mb-2 min-w-0">
       <div
-        className="flex items-center justify-center w-[26px] h-[26px] rounded-lg"
+        className="flex items-center justify-center shrink-0 w-[26px] h-[26px] rounded-lg"
         style={{ background: grad, boxShadow: `0 3px 8px ${color}30` }}
       >
         <Icon className="w-[13px] h-[13px] text-white" />
       </div>
-      <p className="font-['IBM_Plex_Mono',monospace] text-[9px] font-bold uppercase tracking-[0.06em] text-[#94A3B8]">
+      <p className="min-w-0 truncate font-['IBM_Plex_Mono',monospace] text-[9px] font-bold uppercase tracking-[0.06em] text-[#94A3B8]">
         {label}
       </p>
     </div>
-    <p className="font-['IBM_Plex_Mono',monospace] text-[26px] font-extrabold leading-none" style={{ color }}>
+    <p
+      className="truncate font-['IBM_Plex_Mono',monospace] text-[22px] sm:text-[26px] font-extrabold leading-none"
+      style={{ color }}
+    >
       {value}
     </p>
   </div>
@@ -1131,7 +1180,7 @@ const ManageDoctors = () => {
   const deptOptions = departments.map((d) => ({ value: d.value, label: d.label }));
 
   return (
-    <section className={`min-h-screen px-4 py-6 ${pageGradientBg} font-[Noto_Sans_Bengali,sans-serif]`}>
+    <section className={`min-h-screen px-3 sm:px-4 py-5 sm:py-6 ${pageGradientBg} font-[Noto_Sans_Bengali,sans-serif]`}>
       {popup && <Popup type={popup.type} message={popup.message} onClose={() => setPopup(null)} />}
       {offlinePopup && <Popup type="offline" onClose={() => setOfflinePopup(false)} />}
 
@@ -1164,10 +1213,10 @@ const ManageDoctors = () => {
         />
       )}
 
-      <div className="max-w-2xl mx-auto">
+      <div className="w-full min-w-0 max-w-2xl mx-auto">
         {/* Page header — gradient icon badge, matching ManageReferrer/ManageStaff */}
-        <div className="flex items-start justify-between mb-6">
-          <div className="flex items-center gap-3">
+        <div className="flex items-start justify-between gap-3 mb-5 sm:mb-6">
+          <div className="flex items-center gap-3 min-w-0">
             <div
               className="w-11 h-11 flex items-center justify-center shrink-0 rounded-xl shadow-md"
               style={{
@@ -1177,16 +1226,16 @@ const ManageDoctors = () => {
             >
               <Stethoscope className="w-[18px] h-[18px] text-white" />
             </div>
-            <div>
-              <h1 className="font-['IBM_Plex_Sans',sans-serif] text-[22px] font-bold text-[#0F172A] leading-tight">
+            <div className="min-w-0">
+              <h1 className="font-['IBM_Plex_Sans',sans-serif] text-xl sm:text-[22px] font-bold text-[#0F172A] leading-tight truncate">
                 ডাক্তার তালিকা
               </h1>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <Link
               to="/setup"
-              className="flex items-center gap-1.5 transition-all font-semibold px-[14px] py-2 border-[1.5px] border-[#E2E8F0] rounded-xl text-[#64748B] font-['IBM_Plex_Mono',monospace] text-xs bg-white hover:bg-[#F1F5F9] hover:text-[#0F172A]"
+              className="flex items-center gap-1.5 transition-all font-semibold px-3 sm:px-[14px] py-2 border-[1.5px] border-[#E2E8F0] rounded-xl text-[#64748B] font-['IBM_Plex_Mono',monospace] text-xs bg-white hover:bg-[#F1F5F9] hover:text-[#0F172A]"
             >
               <ArrowLeft className="w-[13px] h-[13px]" />
             </Link>
@@ -1194,18 +1243,22 @@ const ManageDoctors = () => {
               onClick={handleAddDoctorClick}
               disabled={atDoctorLimit}
               title={atDoctorLimit ? `ডাক্তার সীমা (${maxDoctor}) পূর্ণ হয়েছে` : undefined}
-              className="flex items-center gap-1.5 transition-all font-semibold px-4 py-2 rounded-xl text-white font-['IBM_Plex_Mono',monospace] text-xs border-none shadow-[0_4px_14px_rgba(13,148,136,0.4)] hover:shadow-[0_6px_20px_rgba(13,148,136,0.5)] disabled:opacity-60 disabled:shadow-none disabled:cursor-not-allowed"
+              className="flex items-center gap-1.5 transition-all font-semibold px-3 sm:px-4 py-2 rounded-xl text-white font-['IBM_Plex_Mono',monospace] text-xs border-none shadow-[0_4px_14px_rgba(13,148,136,0.4)] hover:shadow-[0_6px_20px_rgba(13,148,136,0.5)] disabled:opacity-60 disabled:shadow-none disabled:cursor-not-allowed"
               style={{ background: atDoctorLimit ? "#94A3B8" : "linear-gradient(135deg,#0D9488,#0F766E)" }}
             >
               {atDoctorLimit ? <Lock className="w-[13px] h-[13px]" /> : <UserPlus className="w-[13px] h-[13px]" />}
-              নতুন ডাক্তার
+              <span className="whitespace-nowrap">নতুন ডাক্তার</span>
             </button>
           </div>
         </div>
 
-        {/* Stats */}
+        {/* Stats — 2 columns on mobile, 4/5 from sm. With a limit card the 5th
+            item spans the full mobile row so the grid never leaves a lone
+            half-width orphan. */}
         {!initialLoading && (
-          <div className={`grid grid-cols-4 ${maxDoctor !== null ? "sm:grid-cols-5" : ""} gap-3 mb-5`}>
+          <div
+            className={`grid grid-cols-2 ${maxDoctor !== null ? "sm:grid-cols-5" : "sm:grid-cols-4"} gap-2.5 sm:gap-3 mb-5`}
+          >
             <StatCard
               label="মোট ডাক্তার"
               value={stats.total}
@@ -1236,6 +1289,7 @@ const ManageDoctors = () => {
             />
             {maxDoctor !== null && (
               <StatCard
+                className="col-span-2 sm:col-span-1"
                 label="সীমা"
                 value={`${stats.total}/${maxDoctor}`}
                 color={atDoctorLimit ? "#EF4444" : "#64748B"}
@@ -1251,16 +1305,17 @@ const ManageDoctors = () => {
         {atDoctorLimit && (
           <div className="flex items-start gap-2.5 px-3.5 py-2.5 mb-4 bg-[#FEF2F2] border-[1.5px] border-[#EF444430] rounded-xl">
             <Lock className="w-[13px] h-[13px] text-[#EF4444] mt-[1px] shrink-0" />
-            <p className="text-[11px] leading-[1.5] text-[#991B1B] font-[Noto_Sans_Bengali,sans-serif]">
+            <p className="min-w-0 text-[11px] leading-[1.5] text-[#991B1B] font-[Noto_Sans_Bengali,sans-serif]">
               আপনার ল্যাবে সর্বোচ্চ {maxDoctor} জন ডাক্তার যোগ করা যাবে এবং আপনি সীমায় পৌঁছেছেন। নতুন ডাক্তার যোগ করতে
               সীমা বাড়াতে আমাদের সাথে যোগাযোগ করুন।
             </p>
           </div>
         )}
 
-        {/* Toolbar card */}
-        <div className="px-4 py-3 flex flex-wrap items-center gap-2 mb-4 bg-white border border-[#E2E8F0] rounded-2xl">
-          <div className="relative flex-[1_1_160px]">
+        {/* Toolbar card — search takes its own full row on mobile, the two
+            filters then share the next row; on ≥sm everything sits inline. */}
+        <div className="px-3 sm:px-4 py-3 flex flex-wrap items-center gap-2 mb-4 bg-white border border-[#E2E8F0] rounded-2xl">
+          <div className="relative basis-full sm:basis-[160px] sm:flex-1 min-w-0">
             <Search className="w-[13px] h-[13px] text-[#94A3B8] absolute left-[11px] top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
@@ -1288,7 +1343,7 @@ const ManageDoctors = () => {
                 setDeptFilter("all");
                 setCommFilter("all");
               }}
-              className="flex items-center gap-1.5 transition-all font-semibold py-[7px] px-3 border-[1.5px] border-[#EF444430] rounded-[10px] text-[#EF4444] font-['IBM_Plex_Mono',monospace] text-[11px] bg-[#EF444406] hover:bg-[#EF444412]"
+              className="flex items-center justify-center gap-1.5 transition-all font-semibold py-[7px] px-3 border-[1.5px] border-[#EF444430] rounded-[10px] text-[#EF4444] font-['IBM_Plex_Mono',monospace] text-[11px] bg-[#EF444406] hover:bg-[#EF444412] basis-full sm:basis-auto"
             >
               <RotateCcw className="w-3 h-3" /> রিসেট
             </button>
@@ -1301,7 +1356,7 @@ const ManageDoctors = () => {
         ) : visibleDoctors.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 gap-2 text-[#94A3B8] bg-white border border-[#E2E8F0] rounded-2xl">
             <AlertCircle className="w-7 h-7 opacity-40" />
-            <p className="font-['IBM_Plex_Mono',monospace] text-xs">
+            <p className="font-['IBM_Plex_Mono',monospace] text-xs text-center px-4">
               {hasFilters || search ? "কোনো ডাক্তার পাওয়া যায়নি" : "এখনো কোনো ডাক্তার নিবন্ধিত হয়নি"}
             </p>
           </div>
@@ -1323,7 +1378,7 @@ const ManageDoctors = () => {
 
         {/* Pagination */}
         {!initialLoading && pagination.totalPages > 1 && (
-          <div className="mt-4 px-4 py-3 bg-white border border-[#E2E8F0] rounded-2xl">
+          <div className="mt-4 px-3 sm:px-4 py-3 bg-white border border-[#E2E8F0] rounded-2xl">
             <Pagination page={pagination.page} totalPages={pagination.totalPages} onPage={handlePage} />
           </div>
         )}
