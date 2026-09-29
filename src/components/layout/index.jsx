@@ -4,17 +4,19 @@ import BillingBanner from "../../components/billingBanner";
 
 const Layout = ({ children }) => {
   return (
-    <div className="flex min-h-screen bg-slate-50">
+    <div className="flex min-h-screen w-full max-w-full bg-slate-50 overflow-x-clip">
       <div className="print:hidden">
         <MobileMenu />
       </div>
       <div className="print:hidden">
         <DesktopMenu />
       </div>
-      <div className="flex-1 flex flex-col lg:ml-64 pb-16 lg:pb-0 print:pb-0 print:ml-0">
+
+      {/* min-w-0 lets this column shrink below its content's width */}
+      <div className="flex-1 min-w-0 flex flex-col lg:ml-64 pb-16 lg:pb-0 print:pb-0 print:ml-0 overflow-x-clip">
         <BillingBanner />
 
-        <main className="flex-1 bg-white/80 backdrop-blur-sm relative print:pt-0">{children}</main>
+        <main className="flex-1 min-w-0 bg-white/80 backdrop-blur-sm relative print:pt-0">{children}</main>
 
         {/* Global Footer – hide on print */}
         <footer className="print:hidden border-t border-gray-200/80 bg-white/50 backdrop-blur-sm relative z-10">
