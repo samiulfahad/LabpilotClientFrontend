@@ -1,9 +1,7 @@
 /**
  * Billing.jsx
- * Restyled to match the LabPilot ledger aesthetic:
- * IBM Plex Mono/Sans, indigo/teal/amber/red accents,
- * StatCard strip, ledger card with gradient header,
- * ActionChip, ModalShell-safe ConfirmModal pattern.
+ * Read-only billing page. Labs cannot mark bills paid from the client;
+ * an unpaid bill shows a "Send Money to bKash" card instead.
  *
  * React Compiler handles memoisation — no useCallback/useMemo
  */
@@ -31,6 +29,10 @@ import { useNavigate } from "react-router-dom";
 import billingService from "../../api/billing";
 import Popup from "../../components/popup";
 import { useAuthStore } from "../../store/authStore";
+
+// ── Config ─────────────────────────────────────────────────────────────────────
+
+const PAYMENT_NUMBER = "01723939836"; // bKash / Nagad (Send Money)
 
 // ── Error helpers ──────────────────────────────────────────────────────────────
 
@@ -219,9 +221,7 @@ const BreakdownAccordion = ({ breakdown }) => {
 
 // ── Current Bill Card ──────────────────────────────────────────────────────────
 
-const CurrentBillCard = ({ status, onPaySuccess, onPayError, onNetworkError }) => {
-  const [paying, setPaying] = useState(false);
-
+const CurrentBillCard = ({ status }) => {
   if (!status?.hasUnpaidBill) {
     return (
       <div
@@ -242,7 +242,6 @@ const CurrentBillCard = ({ status, onPaySuccess, onPayError, onNetworkError }) =
   }
 
   const { bill, isOverdue } = status;
-  const billId = bill._id || bill.id;
   const periodTs = bill.billingPeriodStart || bill.billingPeriod;
   const amount = bill.totalAmount ?? bill.amount;
 
@@ -252,23 +251,6 @@ const CurrentBillCard = ({ status, onPaySuccess, onPayError, onNetworkError }) =
   const gradFrom = isOverdue ? "#FEF2F2" : "#FFFBEB";
   const gradTo = isOverdue ? "#FFE4E6" : "#FEF3C7";
   const borderColor = isOverdue ? "#FECACA" : "#FDE68A";
-
-  const handlePay = async () => {
-    if (!billId) return;
-    setPaying(true);
-    try {
-      await billingService.pay(billId);
-      onPaySuccess();
-    } catch (err) {
-      if (isNetworkError(err)) {
-        onNetworkError?.();
-      } else {
-        onPayError(getErrorMessage(err, "পেমেন্ট ব্যর্থ হয়েছে। আবার চেষ্টা করুন।"));
-      }
-    } finally {
-      setPaying(false);
-    }
-  };
 
   return (
     <div
@@ -323,23 +305,23 @@ const CurrentBillCard = ({ status, onPaySuccess, onPayError, onNetworkError }) =
 
       <BreakdownAccordion breakdown={bill.breakdown} />
 
-      <button
-        onClick={handlePay}
-        disabled={paying || !billId}
-        className="mt-4 w-full flex items-center justify-center gap-2 py-3 rounded-xl font-['IBM_Plex_Mono',monospace] text-xs font-semibold text-white border-none transition-all"
-        style={{
-          background: paying || !billId ? "#94A3B8" : "linear-gradient(135deg,#6366F1,#4F46E5)",
-          boxShadow: paying || !billId ? "none" : "0 4px 14px rgba(99,102,241,0.4)",
-          cursor: paying || !billId ? "not-allowed" : "pointer",
-        }}
-      >
-        {paying ? (
-          <span className="animate-spin inline-block w-[14px] h-[14px] rounded-full border-2 border-white/40 border-t-white" />
-        ) : (
-          <CreditCard className="w-[13px] h-[13px]" />
-        )}
-        {paying ? "প্রক্রিয়াকরণ হচ্ছে…" : `পরিশোধ করুন — ${fmt.currency(amount)}`}
-      </button>
+      {/* Send Money instruction — informational only, no client-side payment action */}
+      <div className="mt-4 flex items-center gap-3 rounded-xl border-[1.5px] border-[#E2E8F0] bg-white px-4 py-3">
+        <div className="w-9 h-9 rounded-xl bg-[#6366F1] flex items-center justify-center shrink-0">
+          <Banknote className="w-4 h-4 text-white" />
+        </div>
+        <div>
+          <p className="font-['IBM_Plex_Mono',monospace] text-[10px] font-bold uppercase tracking-[0.08em] text-[#94A3B8]">
+            bKash অথবা Nagad
+          </p>
+          <p className="font-['IBM_Plex_Sans',sans-serif] text-sm font-bold text-[#0F172A]">
+            <span className="text-[#EF4444]">{fmt.currency(amount)}</span> সেন্ড মানি করুন
+          </p>
+          <p className="font-['IBM_Plex_Mono',monospace] text-[18px] font-extrabold text-[#0F172A] tracking-wide">
+            {PAYMENT_NUMBER}
+          </p>
+        </div>
+      </div>
     </div>
   );
 };
@@ -513,7 +495,7 @@ const CurrentBillSkeleton = () => (
 
 // ── Section Header ─────────────────────────────────────────────────────────────
 
-const SectionHeader = ({ icon: Icon, eyebrow, label, subtitle, accentColor, right }) => (
+const SectionHeader = ({ icon: Icon, eyebrow, subtitle, accentColor, right }) => (
   <div
     className="flex items-center justify-between px-6 py-4 border-b border-[#E2E8F0]"
     style={{ background: "linear-gradient(135deg,#F8FAFC,#EEF2FF)" }}
@@ -543,10 +525,7 @@ const Billing = () => {
   const hasAccess = isAdmin || user?.permissions?.manageBilling === true;
 
   // All hooks must run unconditionally on every render — the permission
-  // check (and its early return) now happens AFTER every hook below,
-  // instead of before them. Bailing out before hooks were called was a
-  // Rules-of-Hooks violation that could throw or misbehave if `hasAccess`
-  // ever changes value between renders (e.g. `user` populating async).
+  // check (and its early return) happens AFTER every hook below.
   const [status, setStatus] = useState(null);
   const [history, setHistory] = useState([]);
   const [loadingStatus, setLoadingStatus] = useState(true);
@@ -554,7 +533,6 @@ const Billing = () => {
   const [statusError, setStatusError] = useState(null);
   const [historyError, setHistoryError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [popup, setPopup] = useState(null);
   const [offlinePopup, setOfflinePopup] = useState(false);
 
   const fetchStatus = async () => {
@@ -592,9 +570,8 @@ const Billing = () => {
   };
 
   useEffect(() => {
-    // Skip the fetch entirely for a user without access — no point firing
-    // requests that the backend's `authorize("manageBilling")` hook will
-    // reject anyway.
+    // Skip the fetch entirely for a user without access — the backend's
+    // `authorize("manageBilling")` hook would reject history anyway.
     if (!hasAccess) return;
     fetchStatus();
     fetchHistory();
@@ -606,21 +583,8 @@ const Billing = () => {
     setRefreshing(false);
   };
 
-  const handlePaySuccess = () => {
-    setPopup({ type: "success", message: "পেমেন্ট সফলভাবে সম্পন্ন হয়েছে।" });
-    fetchStatus();
-    fetchHistory();
-  };
-
-  const handlePayError = (message) => {
-    setPopup({ type: "error", message });
-  };
-
-  const handleNetworkError = () => setOfflinePopup(true);
-
   const totalPaid = history.filter((b) => b.status === "paid").reduce((s, b) => s + (b.totalAmount ?? 0), 0);
   const totalUnpaid = history.filter((b) => b.status === "unpaid").reduce((s, b) => s + (b.totalAmount ?? 0), 0);
-  const paidCount = history.filter((b) => b.status === "paid").length;
 
   // ═══════════ ফ্রন্টএন্ড পারমিশন চেক ═══════════
   if (!hasAccess) {
@@ -635,7 +599,6 @@ const Billing = () => {
       className="min-h-screen px-4 py-6 font-['IBM_Plex_Sans',sans-serif]"
       style={{ background: "linear-gradient(to bottom right,#f8fafc,#eff6ff,#eef2ff)" }}
     >
-      {popup && <Popup type={popup.type} message={popup.message} onClose={() => setPopup(null)} />}
       {offlinePopup && <Popup type="offline" onClose={() => setOfflinePopup(false)} />}
 
       <div className="max-w-2xl mx-auto">
@@ -714,12 +677,7 @@ const Billing = () => {
                 </div>
               </div>
             ) : (
-              <CurrentBillCard
-                status={status}
-                onPaySuccess={handlePaySuccess}
-                onPayError={handlePayError}
-                onNetworkError={handleNetworkError}
-              />
+              <CurrentBillCard status={status} />
             )}
           </div>
         </div>
