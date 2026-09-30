@@ -16,6 +16,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import Popup from "../../components/popup"; // new import
+import LabPilotLogo from "../../components/LabPilotLogo"; // adjust path to wherever the logo file lives
 
 // ── Axios‑native network error detection (same as other pages) ───────
 const isNetworkError = (err) => err?.isAxiosError === true && !err.response;
@@ -353,17 +354,9 @@ export default function Login() {
             className="flex items-center gap-3 px-4 sm:px-6 py-4 rounded-t-3xl border-b border-slate-200"
             style={{ background: "linear-gradient(135deg, #dbeafe 0%, #e2e8f0 100%)" }}
           >
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center shadow-md shadow-blue-500/20">
-              <span className="text-white font-bold text-sm">LP</span>
-            </div>
-            <div className="flex flex-col min-w-0">
-              <span className="text-slate-900 font-bold text-base leading-none">
-                LabPilot<span className="font-light">Pro</span>
-              </span>
-              <span className="text-[10px] text-slate-500 font-medium leading-tight mt-1 tracking-wider">
-                Your Smart Partner
-              </span>
-            </div>
+            {/* Light theme (header bg is light). showPulse → animated heartbeat line under the wordmark. */}
+            <LabPilotLogo theme="light" iconClassName="w-12 h-12" showPulse showTagline className="min-w-0" />
+
             <div className="ml-auto flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 border border-emerald-100 rounded-full">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               <span className="text-[10px] font-bold text-emerald-600">Online</span>

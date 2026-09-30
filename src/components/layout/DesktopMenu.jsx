@@ -5,6 +5,7 @@ import { useAuthStore } from "../../store/authStore";
 import { getMenuForLabType } from "./menu";
 import LoadingScreen from "../loadingPage";
 import Modal from "../modal";
+import LabPilotLogo from "../LabPilotLogo"; // put LabPilotLogo.jsx in src/components/
 
 const DesktopMenu = () => {
   const logout = useAuthStore((s) => s.logout);
@@ -28,25 +29,7 @@ const DesktopMenu = () => {
       <nav className="hidden font-anek lg:flex w-64 fixed left-0 top-0 h-screen flex-col bg-sky-200/10 backdrop-blur-md border-r border-gray-200/80 shadow-lg z-40">
         {/* ── Brand Header ─────────────────────────────────────────── */}
         <div className="flex-shrink-0 px-5 py-4 bg-gradient-to-br from-blue-200 to-slate-200 border-b border-slate-200">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-md shadow-blue-500/20 flex-shrink-0">
-              <span className="text-white font-bold text-sm">LP</span>
-            </div>
-            <div className="flex flex-col min-w-0">
-              <span
-                className="text-slate-900 font-bold text-base leading-none"
-                style={{
-                  fontFamily: "'Inter', 'SF Pro Display', system-ui, sans-serif",
-                  letterSpacing: "-0.02em",
-                }}
-              >
-                LabPilot<span className="font-light">Pro</span>
-              </span>
-              <span className="text-[10px] text-slate-500 font-medium leading-tight mt-1">
-                Your Smart Partner{" "}
-              </span>
-            </div>
-          </div>
+          <LabPilotLogo iconClassName="w-10 h-10" />
         </div>
 
         {/* ── Scrollable Menu ───────────────────────────────────────── */}

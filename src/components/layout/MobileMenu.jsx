@@ -18,6 +18,7 @@ import { useAuthStore } from "../../store/authStore";
 import { getMenuForLabType } from "./menu";
 import LoadingScreen from "../loadingPage";
 import Modal from "../modal";
+import LabPilotLogo from "../LabPilotLogo"; // adjust path to wherever the logo file lives
 
 // Same admin-bypass + `modules.includes` rule as hasModuleAccess in Home.jsx,
 // RequireModules in App.jsx, and getMenuForLabType in menu.js — kept local
@@ -275,20 +276,17 @@ const MobileMenu = () => {
       >
         <div className="flex flex-col h-full">
           {/* Drawer Header */}
-          <div className="flex-shrink-0 p-5 bg-gradient-to-br from-blue-600 to-indigo-600">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 shrink-0 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center ring-1 ring-white/30">
-                  <span className="text-white font-bold text-xl">LP</span>
-                </div>
-                <div className="min-w-0">
-                  <p className="text-white font-semibold text-base truncate">LabPilot Pro</p>
-                  <p className="text-blue-100/90 text-sm font-medium truncate">Your Smart Partner</p>
-                </div>
-              </div>
+          <div className="relative flex-shrink-0 overflow-hidden p-5 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 border-b border-white/10">
+            {/* Soft colored glows + top sheen for depth (decorative) */}
+            <div className="pointer-events-none absolute -top-16 -left-10 w-56 h-56 rounded-full bg-cyan-400/20 blur-3xl" />
+            <div className="pointer-events-none absolute -bottom-20 -right-10 w-56 h-56 rounded-full bg-violet-500/25 blur-3xl" />
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/40 to-transparent" />
+
+            <div className="relative flex items-center justify-between">
+              <LabPilotLogo theme="dark" iconClassName="w-10 h-10" showPulse={false} className="min-w-0" />
               <button
                 onClick={closeMenu}
-                className="w-9 h-9 shrink-0 flex items-center justify-center rounded-lg bg-white/20 hover:bg-white/30"
+                className="w-9 h-9 shrink-0 flex items-center justify-center rounded-lg bg-white/10 ring-1 ring-white/15 hover:bg-white/20 transition-colors"
                 aria-label="Close menu"
               >
                 <X className="w-5 h-5 text-white" />
