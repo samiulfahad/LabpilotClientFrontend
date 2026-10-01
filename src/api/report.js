@@ -2,6 +2,8 @@ import api from "./baseAPI";
 
 const reportService = {
   // ── Outdoor ──────────────────────────────────────────────────────────────────
+  // Newest-first, 40 per page. Pass the previous response's nextCursor to get the next page.
+  getOutdoorList: (cursor) => api.get("/outdoorReport", { params: cursor ? { cursor } : undefined }),
   getOutdoorPatient: (invoiceId) => api.get(`/outdoorReport/${invoiceId}`),
   addReport: (data) => api.post("/outdoorReport/add", data),
   updateReport: (data) => api.put("/outdoorReport/update", data),

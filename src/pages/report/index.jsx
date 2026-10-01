@@ -2,8 +2,7 @@
  * useCallback / useMemo are intentionally absent throughout this file.
  * babel-plugin-react-compiler handles all memoization automatically.
  */
-import { useState, useEffect } from "react";
-import { createPortal } from "react-dom";
+import { useState, useEffect, useRef } from "react";
 import QRCode from "qrcode";
 import {
   Search,
@@ -24,8 +23,9 @@ import {
   ArrowLeft,
   AlertCircle,
   Hash,
-  Info,
   Trash2,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { useLocation, useNavigate, Link } from "react-router-dom";
 import Popup from "../../components/popup";
@@ -183,8 +183,13 @@ const RUST = {
   icon: "bg-rose-100 text-rose-600",
   ring: "ring-rose-100",
 };
+const GRAY = {
+  text: "text-gray-800",
+  bg: "bg-gray-50",
+  border: "border-gray-200",
+};
 
-// ─── Skeleton ─────────────────────────────────────────────────────────────────
+// ─── Skeletons ────────────────────────────────────────────────────────────────
 
 const RecordSkeleton = () => (
   <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm animate-pulse">
@@ -226,6 +231,15 @@ const RecordSkeleton = () => (
         </div>
       ))}
     </div>
+  </div>
+);
+
+// Placeholder cards for the recent-invoices list (matches collapsed RecordCard height)
+const ListSkeleton = () => (
+  <div className="space-y-3">
+    {[0, 1, 2].map((i) => (
+      <div key={i} className="bg-white border border-gray-100 rounded-2xl p-5 animate-pulse h-[132px]" />
+    ))}
   </div>
 );
 
@@ -399,9 +413,32 @@ const StaticDateRow = ({ icon: Icon, token, label, note }) => (
   </div>
 );
 
-// ─── Meta Modal (dates + created / edited / added info) ───────────────────────
+// ─── Meta row (who + when) ────────────────────────────────────────────────────
 
-const MetaModal = ({ record, test, onClose, onSaved, onNetworkError }) => {
+const MetaRow = ({ icon: Icon, token, label, name, date }) => (
+  <div className="flex items-start gap-3 py-3 border-b border-gray-100 last:border-0">
+    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${token.icon}`}>
+      <Icon className="w-4 h-4" />
+    </div>
+    <div className="min-w-0 flex-1">
+      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-0.5">{label}</p>
+      {date ? (
+        <>
+          <p className="text-sm font-bold text-gray-800 truncate">{name ?? "—"}</p>
+          <p className="font-['IBM_Plex_Mono'] text-[11px] text-gray-400 font-medium mt-0.5">
+            {date.date} · {date.time}
+          </p>
+        </>
+      ) : (
+        <p className="text-sm font-medium text-gray-300">তথ্য নেই</p>
+      )}
+    </div>
+  </div>
+);
+
+// ─── Test Meta Panel (inline details: dates + created / edited / added info) ──
+
+const TestMetaPanel = ({ record, test, onDatesSaved, onNetworkError }) => {
   const isIndoor = record._type === "indoor";
 
   const added = test.addedAt ? formatDateTime(test.addedAt) : null;
@@ -411,7 +448,7 @@ const MetaModal = ({ record, test, onClose, onSaved, onNetworkError }) => {
   const saveDateField = async (fieldKey, timestamp) => {
     const payload = { [fieldKey]: timestamp };
 
-    if (record._type === "indoor") {
+    if (isIndoor) {
       await reportService.updateIndoorDates({
         patientId: record._patientId,
         testId: test.testId,
@@ -426,115 +463,54 @@ const MetaModal = ({ record, test, onClose, onSaved, onNetworkError }) => {
       });
     }
 
-    onSaved(test.testId, test.addedAt, {
+    onDatesSaved(test.testId, test.addedAt, {
       sampleCollectionDate: test.report?.sampleCollectionDate ?? null,
       reportDate: test.report?.reportDate ?? null,
       ...payload,
     });
   };
 
-  const Row = ({ icon: Icon, token, label, name, date }) => (
-    <div className="flex items-start gap-3 py-3 border-b border-gray-100 last:border-0">
-      <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${token.icon}`}>
-        <Icon className="w-4 h-4" />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-0.5">{label}</p>
-        {date ? (
-          <>
-            <p className="text-sm font-bold text-gray-800 truncate">{name ?? "—"}</p>
-            <p className="font-['IBM_Plex_Mono'] text-[11px] text-gray-400 font-medium mt-0.5">
-              {date.date} · {date.time}
-            </p>
-          </>
-        ) : (
-          <p className="text-sm font-medium text-gray-300">তথ্য নেই</p>
-        )}
-      </div>
+  return (
+    <div className="px-1">
+      <EditableDateRow
+        icon={Calendar}
+        iconColor="text-teal-600"
+        token={TEAL}
+        label="Sample Collection Date"
+        storedValue={test.report?.sampleCollectionDate}
+        onSave={(ts) => saveDateField("sampleCollectionDate", ts)}
+        onNetworkError={onNetworkError}
+      />
+      {test.isCompleted ? (
+        <EditableDateRow
+          icon={ClipboardList}
+          iconColor="text-orange-600"
+          token={OCHRE}
+          label="Report Date"
+          storedValue={test.report?.reportDate}
+          onSave={(ts) => saveDateField("reportDate", ts)}
+          onNetworkError={onNetworkError}
+        />
+      ) : (
+        <StaticDateRow
+          icon={ClipboardList}
+          token={OCHRE}
+          label="Report Date"
+          note="আপলোডের সময় স্বয়ংক্রিয়ভাবে সেট হবে"
+        />
+      )}
+      <MetaRow icon={Upload} token={TEAL} label="Report Uploaded By" name={test.completedBy?.name} date={created} />
+      <MetaRow icon={Pencil} token={RUST} label="Last Edited By" name={test.updatedBy?.name} date={edited} />
+      {isIndoor && (
+        <MetaRow
+          icon={Hash}
+          token={OCHRE}
+          label="Added"
+          name={added ? (test.addedBy?.name ?? "রিপোর্ট এন্ট্রি যোগ করা হয়েছে") : null}
+          date={added}
+        />
+      )}
     </div>
-  );
-
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm px-4"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white rounded-2xl shadow-[0_25px_60px_rgba(15,23,42,0.25)] w-full max-w-md max-h-[85vh] flex flex-col animate-[fadeUp_0.25s_ease]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="shrink-0 px-6 py-4 border-b border-gray-100 flex items-start justify-between gap-3 rounded-t-2xl">
-          <div className="min-w-0 flex items-center gap-3">
-            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${INDIGO.icon}`}>
-              <FlaskConical className="w-4 h-4" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-0.5">টেস্ট তথ্য</p>
-              <h3 className="text-sm font-bold text-gray-800 truncate font-noto">{test.name}</h3>
-            </div>
-          </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors shrink-0 mt-0.5">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-6 py-8">
-          {/* ── Dates ── */}
-          <div className="px-1">
-            <EditableDateRow
-              icon={Calendar}
-              iconColor="text-teal-600"
-              token={TEAL}
-              label="Sample Collection Date"
-              storedValue={test.report?.sampleCollectionDate}
-              onSave={(ts) => saveDateField("sampleCollectionDate", ts)}
-              onNetworkError={onNetworkError}
-            />
-            {test.isCompleted ? (
-              <EditableDateRow
-                icon={ClipboardList}
-                iconColor="text-orange-600"
-                token={OCHRE}
-                label="Report Date"
-                storedValue={test.report?.reportDate}
-                onSave={(ts) => saveDateField("reportDate", ts)}
-                onNetworkError={onNetworkError}
-              />
-            ) : (
-              <StaticDateRow
-                icon={ClipboardList}
-                token={OCHRE}
-                label="Report Date"
-                note="আপলোডের সময় স্বয়ংক্রিয়ভাবে সেট হবে"
-              />
-            )}
-          </div>
-          <div className="px-1">
-            <Row icon={Upload} token={TEAL} label="Report Uploaded By" name={test.completedBy?.name} date={created} />
-            <Row icon={Pencil} token={RUST} label="Last Edited By" name={test.updatedBy?.name} date={edited} />
-            {isIndoor && (
-              <Row
-                icon={Hash}
-                token={OCHRE}
-                label="Added"
-                name={added ? (test.addedBy?.name ?? "রিপোর্ট এন্ট্রি যোগ করা হয়েছে") : null}
-                date={added}
-              />
-            )}
-          </div>
-        </div>
-
-        <div className="shrink-0 px-6 py-4 border-t border-gray-100 rounded-b-2xl">
-          <button
-            onClick={onClose}
-            className="w-full py-2.5 rounded-xl border border-gray-200 text-gray-700 text-xs font-bold hover:bg-gray-50 transition-all"
-          >
-            বন্ধ করুন
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body,
   );
 };
 
@@ -633,10 +609,102 @@ const TestActions = ({ record, test }) => {
   );
 };
 
+// ─── Test Card (each card owns its own collapse / expand state) ───────────────
+// Height animates via the grid-rows 0fr → 1fr trick (no measuring needed).
+// While closed, the panel is visibility:hidden so its buttons can't be tabbed
+// into; the visibility change is delayed on close so the animation can finish.
+
+const TestCard = ({ record, test, onDatesSaved, onNetworkError }) => {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div
+      className={`rounded-xl border transition-all ${
+        test.isCompleted
+          ? `${TEAL.border} ${TEAL.bg}`
+          : "border-gray-100 bg-white hover:border-gray-200 hover:shadow-sm"
+      }`}
+    >
+      {/* ── Header row (always visible) ── */}
+      <div className="flex items-center justify-between gap-3 px-4 py-3.5">
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          className="flex items-center gap-3 min-w-0 flex-1 text-left cursor-pointer"
+        >
+          <div
+            className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+              test.isCompleted ? TEAL.icon : OCHRE.icon
+            }`}
+          >
+            <FlaskConical className="w-3.5 h-3.5" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-gray-800 truncate leading-snug">{test.name}</p>
+            <div className="flex items-center gap-2 mt-1">
+              {test.isCompleted ? (
+                <span
+                  className={`inline-flex items-center gap-1 text-[10px] font-bold ${TEAL.text} ${TEAL.bg} border ${TEAL.border} px-1.5 py-0.5 rounded-full`}
+                >
+                  <CheckCircle2 className="w-2.5 h-2.5" /> Completed
+                </span>
+              ) : (
+                <span
+                  className={`inline-flex items-center gap-1 text-[10px] font-bold ${OCHRE.text} ${OCHRE.bg} border ${OCHRE.border} px-1.5 py-0.5 rounded-full`}
+                >
+                  Pending
+                </span>
+              )}
+              {test.price != null && (
+                <span className="font-['IBM_Plex_Mono'] text-[10px] text-gray-400 tabular-nums">
+                  ৳{fmt(test.price)}
+                </span>
+              )}
+            </div>
+          </div>
+        </button>
+
+        <div className="shrink-0 flex items-center gap-1.5">
+          <TestActions record={record} test={test} />
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            aria-expanded={open}
+            title={open ? "Collapse details" : "Expand details"}
+            className="p-2 rounded-xl border border-gray-200 bg-white/70 text-gray-400 hover:text-gray-700 hover:border-gray-300 transition-all"
+          >
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-300 ${open ? "rotate-180" : ""}`} />
+          </button>
+        </div>
+      </div>
+
+      {/* ── Collapsible details ── */}
+      <div
+        className={`grid transition-[grid-template-rows] duration-300 ease-out ${
+          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+        }`}
+      >
+        <div
+          className="overflow-hidden"
+          aria-hidden={!open}
+          style={{
+            visibility: open ? "visible" : "hidden",
+            transition: `visibility 0s linear ${open ? "0s" : "0.3s"}`,
+          }}
+        >
+          <div className="mx-4 mb-4 pt-2 border-t border-gray-200/70">
+            <TestMetaPanel record={record} test={test} onDatesSaved={onDatesSaved} onNetworkError={onNetworkError} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─── Record Detail Card ───────────────────────────────────────────────────────
 
 const RecordDetail = ({ record, onDatesSaved, onNetworkError }) => {
-  const [metaTest, setMetaTest] = useState(null);
   const [qrDataUrl, setQrDataUrl] = useState(null);
 
   useEffect(() => {
@@ -778,57 +846,13 @@ const RecordDetail = ({ record, onDatesSaved, onNetworkError }) => {
           </div>
           <div className="space-y-2">
             {onlineTests.map((test, i) => (
-              <div
+              <TestCard
                 key={(test.testId ?? "") + (test.addedAt ?? i)}
-                className={`rounded-xl border px-4 py-3.5 transition-all ${
-                  test.isCompleted
-                    ? `${TEAL.border} ${TEAL.bg}`
-                    : "border-gray-100 bg-white hover:border-gray-200 hover:shadow-sm"
-                }`}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div
-                      className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${test.isCompleted ? TEAL.icon : OCHRE.icon}`}
-                    >
-                      <FlaskConical className="w-3.5 h-3.5" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-bold text-gray-800 truncate leading-snug">{test.name}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        {test.isCompleted ? (
-                          <span
-                            className={`inline-flex items-center gap-1 text-[10px] font-bold ${TEAL.text} ${TEAL.bg} border ${TEAL.border} px-1.5 py-0.5 rounded-full`}
-                          >
-                            <CheckCircle2 className="w-2.5 h-2.5" /> Completed
-                          </span>
-                        ) : (
-                          <span
-                            className={`inline-flex items-center gap-1 text-[10px] font-bold ${OCHRE.text} ${OCHRE.bg} border ${OCHRE.border} px-1.5 py-0.5 rounded-full`}
-                          >
-                            Pending
-                          </span>
-                        )}
-                        {test.price != null && (
-                          <span className="font-['IBM_Plex_Mono'] text-[10px] text-gray-400 tabular-nums">
-                            ৳{fmt(test.price)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="shrink-0 flex items-center gap-1.5">
-                    <button
-                      onClick={() => setMetaTest(test)}
-                      className="p-2 rounded-xl border border-gray-200 text-gray-400 hover:text-gray-700 hover:border-gray-300 transition-all"
-                      title="Created / Edited info"
-                    >
-                      <Info className="w-3.5 h-3.5" />
-                    </button>
-                    <TestActions record={record} test={test} />
-                  </div>
-                </div>
-              </div>
+                record={record}
+                test={test}
+                onDatesSaved={onDatesSaved}
+                onNetworkError={onNetworkError}
+              />
             ))}
           </div>
         </div>
@@ -858,28 +882,83 @@ const RecordDetail = ({ record, onDatesSaved, onNetworkError }) => {
           </div>
         </div>
       )}
-
-      {metaTest && (
-        <MetaModal
-          record={record}
-          test={metaTest}
-          onClose={() => setMetaTest(null)}
-          onSaved={(testId, addedAt, dates) => {
-            // Keep the currently-open modal's test object in sync too —
-            // otherwise the row still shows the pre-save date until the
-            // modal is closed and reopened, since metaTest is a snapshot
-            // taken when the Info button was clicked.
-            setMetaTest((prev) =>
-              prev && prev.testId === testId && prev.addedAt === addedAt
-                ? { ...prev, report: { ...(prev.report ?? {}), ...dates } }
-                : prev,
-            );
-            onDatesSaved(testId, addedAt, dates);
-          }}
-          onNetworkError={onNetworkError}
-        />
-      )}
     </div>
+  );
+};
+
+// ─── Record Card (collapsed summary → expands to full RecordDetail) ───────────
+// Used both for the single search result and for every row of the recent-
+// invoices list. Each card owns its own expanded state, so in a list use
+// key={record.displayId}.
+
+const StatTile = ({ label, value, token }) => (
+  <div className={`rounded-xl border px-3 py-2.5 text-center ${token.border} ${token.bg}`}>
+    <p className={`font-['IBM_Plex_Mono'] text-lg font-semibold leading-none tabular-nums ${token.text}`}>{value}</p>
+    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wide mt-1.5">{label}</p>
+  </div>
+);
+
+const RecordCard = ({ record, onDatesSaved, onNetworkError }) => {
+  const [expanded, setExpanded] = useState(false);
+
+  if (expanded) {
+    return (
+      <div>
+        <button
+          onClick={() => setExpanded(false)}
+          className="w-full flex items-center justify-center gap-1.5 py-2 mb-2 text-[11px] font-bold text-gray-500 hover:text-gray-800 bg-white/60 border border-gray-200 rounded-xl transition-all"
+        >
+          <ChevronUp className="w-3.5 h-3.5" /> Collapse
+        </button>
+        <RecordDetail record={record} onDatesSaved={onDatesSaved} onNetworkError={onNetworkError} />
+      </div>
+    );
+  }
+
+  const isIndoor = record._type === "indoor";
+  const token = isIndoor ? INDIGO : TEAL;
+  const total = record.tests.length;
+  const online = record.tests.filter((t) => t.schemaId).length;
+  const offline = total - online;
+  const completed = record.tests.filter((t) => t.schemaId && t.isCompleted).length;
+  const { date, time } = formatDateTime(record.createdAt);
+
+  return (
+    <button
+      onClick={() => setExpanded(true)}
+      className="w-full text-left bg-white border border-gray-100 rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:border-gray-200 hover:shadow-md transition-all overflow-hidden"
+    >
+      <div className="px-5 pt-4 pb-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${token.icon}`}>
+              <Hash className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h3 className="font-['IBM_Plex_Mono'] text-base font-semibold text-gray-900 leading-none">
+                  {record.displayId}
+                </h3>
+                <span className={`text-[9px] font-bold uppercase tracking-widest ${token.text}`}>
+                  {isIndoor ? "Admission" : "Invoice"}
+                </span>
+              </div>
+              <p className="text-xs text-gray-500 font-medium mt-1.5 truncate">
+                {record.patient?.name || "—"} <span className="text-gray-300">·</span> {date} · {time}
+              </p>
+            </div>
+          </div>
+          <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
+        </div>
+
+        <div className="grid grid-cols-4 gap-2 mt-4">
+          <StatTile label="Total" value={total} token={GRAY} />
+          <StatTile label="Online" value={online} token={INDIGO} />
+          <StatTile label="Completed" value={`${completed}/${online}`} token={TEAL} />
+          <StatTile label="Offline" value={offline} token={OCHRE} />
+        </div>
+      </div>
+    </button>
   );
 };
 
@@ -899,6 +978,13 @@ const Report = () => {
   // outdoorReportRoutes.js). Kept as the raw error message from the
   // response so the banner can show backend-provided context if it varies.
   const [deletedInfo, setDeletedInfo] = useState(null);
+
+  // ── Recent outdoor invoices (cursor-paginated, 40 per page) ───────────────
+  const [list, setList] = useState([]);
+  const [nextCursor, setNextCursor] = useState(null);
+  const [listLoading, setListLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const sentinelRef = useRef(null);
 
   const location = useLocation();
 
@@ -939,6 +1025,41 @@ const Report = () => {
     }
   };
 
+  const loadInitialList = async () => {
+    try {
+      setListLoading(true);
+      const res = await reportService.getOutdoorList();
+      setList(res.data.invoices.map(normalizeOutdoor));
+      setNextCursor(res.data.nextCursor);
+    } catch (err) {
+      if (isNetworkError(err)) setNetworkError(true);
+      else setPopup({ type: "error", message: "Could not load recent invoices." });
+    } finally {
+      setListLoading(false);
+    }
+  };
+
+  const loadMore = async () => {
+    if (!nextCursor || loadingMore) return;
+    try {
+      setLoadingMore(true);
+      const res = await reportService.getOutdoorList(nextCursor);
+      setList((prev) => [...prev, ...res.data.invoices.map(normalizeOutdoor)]);
+      setNextCursor(res.data.nextCursor);
+    } catch (err) {
+      if (isNetworkError(err)) setNetworkError(true);
+      else setPopup({ type: "error", message: "Could not load more invoices." });
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  // Load the latest 40 invoices on mount (refires on every fresh mount, so
+  // coming back from /report-upload shows up-to-date completion status).
+  useEffect(() => {
+    loadInitialList();
+  }, []);
+
   // Keyed on location.key (not []) so this refires on EVERY navigation
   // into /report — including browser-back / mobile swipe-back / the X
   // button in ReportUpload — not just the very first mount.
@@ -950,6 +1071,23 @@ const Report = () => {
       fetchRecord(idStr);
     }
   }, [location.key]);
+
+  // The list is visible only when no search result / error state is showing.
+  const showList = !searching && !record && !notFound && !invalidId && !deletedInfo;
+
+  // Infinite scroll: load the next page when the sentinel nears the viewport.
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!showList || !el || !nextCursor) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) loadMore();
+      },
+      { rootMargin: "200px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [showList, nextCursor, loadingMore]);
 
   const handleSearch = () => {
     const q = searchQuery.trim();
@@ -977,6 +1115,23 @@ const Report = () => {
         t.testId !== testId || t.addedAt !== addedAt ? t : { ...t, report: { ...(t.report ?? {}), ...dates } },
       ),
     }));
+    setPopup({ type: "success", message: "Dates saved" });
+  };
+
+  // Same as handleDatesSaved, but for a card inside the recent-invoices list.
+  const handleListDatesSaved = (displayId, testId, addedAt, dates) => {
+    setList((prev) =>
+      prev.map((r) =>
+        r.displayId !== displayId
+          ? r
+          : {
+              ...r,
+              tests: r.tests.map((t) =>
+                t.testId !== testId || t.addedAt !== addedAt ? t : { ...t, report: { ...(t.report ?? {}), ...dates } },
+              ),
+            },
+      ),
+    );
     setPopup({ type: "success", message: "Dates saved" });
   };
 
@@ -1114,7 +1269,8 @@ const Report = () => {
           <>
             <PrintId displayId={record.displayId} onError={handlePrintError} />
             <div className="fu fu2">
-              <RecordDetail
+              <RecordCard
+                key={record.displayId}
                 record={record}
                 onDatesSaved={handleDatesSaved}
                 onNetworkError={() => setNetworkError(true)}
@@ -1123,9 +1279,44 @@ const Report = () => {
           </>
         )}
 
-        <p className="text-center text-[11px] text-gray-400 font-medium mt-5 pb-6">
-          শুধুমাত্র সক্রিয় রেকর্ড প্রদর্শিত হচ্ছে
-        </p>
+        {/* ── Recent invoices (hidden while a search result / error is showing) ── */}
+        {showList && (
+          <>
+            {listLoading ? (
+              <ListSkeleton />
+            ) : list.length === 0 ? (
+              <p className="text-center text-xs text-gray-400 font-medium py-10">No invoices yet</p>
+            ) : (
+              <>
+                <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400 mb-3 px-1">
+                  Recent invoices
+                </p>
+                <div className="space-y-3 fu fu2">
+                  {list.map((r) => (
+                    <RecordCard
+                      key={r.displayId}
+                      record={r}
+                      onDatesSaved={(testId, addedAt, dates) =>
+                        handleListDatesSaved(r.displayId, testId, addedAt, dates)
+                      }
+                      onNetworkError={() => setNetworkError(true)}
+                    />
+                  ))}
+                </div>
+
+                {nextCursor && <div ref={sentinelRef} className="h-10" />}
+                {loadingMore && (
+                  <div className="flex justify-center py-4">
+                    <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                  </div>
+                )}
+                {!nextCursor && (
+                  <p className="text-center text-[11px] text-gray-300 font-medium py-4">No more invoices</p>
+                )}
+              </>
+            )}
+          </>
+        )}
       </div>
     </section>
   );
