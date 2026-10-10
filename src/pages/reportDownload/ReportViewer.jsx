@@ -33,12 +33,14 @@ const LAB_INFO = {
   padHeight: DEFAULT_PAD_HEIGHT_MM,
 };
 
+// doctorName: the doctor's name only (outdoor: invoice.doctor.name,
+// indoor: supervisorDoctor.name). The referrer is not shown on reports.
 const EMPTY_PATIENT = {
   name: "",
   age: "",
   gender: "",
   contact: "",
-  referredBy: "",
+  doctorName: "",
   sampleDate: "",
   reportDate: "",
 };
@@ -430,8 +432,8 @@ function PatientGrid({ patient, isIndoor }) {
       </div>
       <div className="bg-white px-3 py-1.5 flex items-center gap-3 border-b border-black">
         <Stethoscope className="w-2.5 h-2.5 text-black flex-shrink-0" />
-        <span className="text-[9px] font-bold text-black uppercase tracking-widest">Referred By</span>
-        <span className="text-xs font-semibold text-black">{patient.referredBy || "—"}</span>
+        <span className="text-[9px] font-bold text-black uppercase tracking-widest">Doctor</span>
+        <span className="text-xs font-semibold text-black">{patient.doctorName || "—"}</span>
       </div>
     </div>
   );
@@ -606,16 +608,16 @@ function buildPrintHTML({ reportName, shortId, patient, labInfo, sections, print
 <body class="font-sans bg-white text-black m-0 p-0">
   <div class="max-w-[680px] mx-auto ${isPad ? "pb-5" : "pb-[90px]"}">
     ${topBlock}
-    <div class="bg-gray-100 py-2 px-3 flex items-center justify-between border border-black border-t-0">
+    <div class="bg-gray-100 py-2 px-3 flex items-center justify-between border border-black ${isPad ? "" : "border-t-0"}">
       <div class="text-sm font-bold text-black uppercase tracking-wide">${reportName}</div>
       ${shortId ? `<div class="text-[9px] text-black font-mono">${isIndoor ? "Admission No" : "Invoice No"}: ${shortId}</div>` : ""}
     </div>
-    <table class="w-full border-collapse border border-black border-t-0">
+    <table class="w-full border-collapse border border-black mt-2">
       <tr class="border-b border-black">${mainCells}</tr>
       <tr>
         <td colspan="5" class="py-[5px] px-3 bg-white">
-          <span class="text-[8px] font-bold text-black uppercase tracking-[0.06em] mr-2.5">Referred By</span>
-          <span class="text-[11px] font-semibold text-black">${patient.referredBy || "—"}</span>
+          <span class="text-[8px] font-bold text-black uppercase tracking-[0.06em] mr-2.5">Doctor</span>
+          <span class="text-[11px] font-semibold text-black">${patient.doctorName || "—"}</span>
         </td>
       </tr>
     </table>

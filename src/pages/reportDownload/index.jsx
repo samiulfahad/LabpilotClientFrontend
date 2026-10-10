@@ -149,7 +149,7 @@ export default function ReportDownload() {
           age: formatAge(data.patient?.age),
           gender: data.patient?.gender ?? "",
           contact: data.patient?.contactNumber ?? "",
-          referredBy: data.referrer?.name ?? "",
+          doctorName: data.doctorName ?? "",
           sampleDate: formatDate(data.report?.sampleCollectionDate),
           reportDate: formatDate(data.report?.reportDate),
         });

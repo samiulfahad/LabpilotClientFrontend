@@ -54,7 +54,7 @@ const s = StyleSheet.create({
     fontFamily: "Helvetica-Bold",
   },
   cellValue: { fontSize: 9, fontFamily: "Helvetica-Bold", color: BLACK },
-  referredRow: { flexDirection: "row", alignItems: "center", gap: 6, padding: "5 8" },
+  doctorRow: { flexDirection: "row", alignItems: "center", gap: 6, padding: "5 8" },
 
   sectionWrap: { border: `1 solid ${LINE}`, marginBottom: 10 },
   sectionHead: {
@@ -607,9 +607,9 @@ export function ReportPDFDocument({
               </View>
             ))}
           </View>
-          <View style={s.referredRow}>
-            <Text style={[s.cellLabel, { marginBottom: 0 }]}>Referred By</Text>
-            <Text style={[s.cellValue, { fontSize: 9 }]}>{patient.referredBy || "—"}</Text>
+          <View style={s.doctorRow}>
+            <Text style={[s.cellLabel, { marginBottom: 0 }]}>Doctor</Text>
+            <Text style={[s.cellValue, { fontSize: 9 }]}>{patient.doctorName || "—"}</Text>
           </View>
         </View>
 

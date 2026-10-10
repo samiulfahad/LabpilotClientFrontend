@@ -17,7 +17,7 @@ const HARDCODED_PATIENT = {
   age: "34 years",
   gender: "Female",
   contact: "01700-000000",
-  referredBy: "Dr. John Smith",
+  doctorName: "Dr. John Smith",
   sampleDate: "01 Jan 2026",
   reportDate: "02 Jan 2026",
 };
