@@ -560,7 +560,7 @@ function buildPrintHTML({ reportName, shortId, patient, labInfo, sections, print
 
   const topBlock = isPad
     ? `<div style="height:${padHeightMm}mm;" class="bg-white"></div>`
-    : `<div class="border-b-2 border-black py-4 px-1 flex items-start justify-between">
+    : `<div class="border-b-2 border-black py-4 px-5 flex items-start justify-between">
         <div>
           <div class="text-[16px] font-bold text-black uppercase tracking-wide">${labInfo.name}</div>
           ${labInfo.tagline ? `<div class="text-[10px] text-black italic mt-[3px]">${labInfo.tagline}</div>` : ""}
@@ -607,8 +607,11 @@ function buildPrintHTML({ reportName, shortId, patient, labInfo, sections, print
 </head>
 <body class="font-sans bg-white text-black m-0 p-0">
   <div class="max-w-[680px] mx-auto ${isPad ? "pb-5" : "pb-[90px]"}">
-    ${topBlock}
-    <div class="bg-gray-100 py-2 px-3 flex items-center justify-between border border-black ${isPad ? "" : "border-t-0"}">
+    ${isPad ? topBlock : ""}
+    <div>
+    ${isPad ? "" : topBlock}
+    <div class="px-5 pt-3">
+    <div class="bg-gray-100 py-2 px-3 flex items-center justify-between border border-black">
       <div class="text-sm font-bold text-black uppercase tracking-wide">${reportName}</div>
       ${shortId ? `<div class="text-[9px] text-black font-mono">${isIndoor ? "Admission No" : "Invoice No"}: ${shortId}</div>` : ""}
     </div>
@@ -621,8 +624,10 @@ function buildPrintHTML({ reportName, shortId, patient, labInfo, sections, print
         </td>
       </tr>
     </table>
-    <div class="pt-1 px-1">
+    <div class="pt-2.5">
       ${sections.map(([name, data], i) => renderSection(name, data, i)).join("")}
+    </div>
+    </div>
     </div>
   </div>
   ${footerBlock}
