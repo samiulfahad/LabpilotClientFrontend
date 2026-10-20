@@ -108,7 +108,7 @@ const THEMES = {
  * <LabPilotLogo theme="dark" />                     for dark backgrounds
  * <LabPilotLogo showPulse={false} showTagline={false} />
  */
-const LabPilotLogo = ({ theme = "light", showTagline = true, showPro = true, showPulse = false, className = "" }) => {
+const LabPilotLogo = ({ theme = "light", showTagline = true, showPro = true, showPulse = true, className = "" }) => {
   const t = THEMES[theme] || THEMES.light;
   return (
     <div className={`flex items-center gap-2.5 ${className}`}>
