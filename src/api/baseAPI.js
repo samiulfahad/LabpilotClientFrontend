@@ -3,10 +3,9 @@ import { useAuthStore } from "../store/authStore";
 
 const ip = "http://10.155.23.187:3000/v1";
 const local = "http://localhost:3000/v1";
-const cloud = "https://client-api.labpilotpro.com/v1"
-const cloud2 = "https://labpilotclientbackend-production.up.railway.app/v1"
+const cloud = "https://labpilotclientbackend-production.up.railway.app/v1"
 const api = axios.create({
-  baseURL: import.meta.env.DEV ? local : cloud2,
+  baseURL: import.meta.env.DEV ? local : cloud,
   timeout: 15000,
   withCredentials: true, // ✅ sends cookies cross-origin
 });
